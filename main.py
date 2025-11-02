@@ -115,7 +115,8 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
         print(f"General Error: {e}")
 
 # --- 🚀 FINAL MAIN ASYNC FUNCTION ---
-async def main(): # <--- Yahan 'async' add kiya gaya
+# --- 🚀 FINAL MAIN ASYNC FUNCTION ---
+async def main(): 
     if not TOKEN or not CHAT_ID:
         print("FATAL ERROR: TELEGRAM_BOT_TOKEN ya TELEGRAM_CHAT_ID environment variable set nahi hai.")
         return
@@ -139,12 +140,13 @@ async def main(): # <--- Yahan 'async' add kiya gaya
     
     print("Bot started and scheduler active (har 15 minute mein).")
     
-    # Run the bot. Yeh blocking call hai aur Event Loop shuru karta hai.
-    await application.run_polling(poll_interval=3.0) # <--- Yahan 'await' add kiya gaya
+    # FINAL FIX: run_polling ki jagah run_bufferless() ka use karein.
+    # Yeh blocking call hai aur background worker ke liye sahi hai.
+    await application.run_bufferless() 
 
 if __name__ == '__main__':
     try:
-        # Aur yahan 'asyncio.run()' ka use kiya gaya
+        # asyncio.run() se main() ko chalao
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         # Graceful exit ke liye
