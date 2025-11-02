@@ -137,7 +137,23 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
         print(f"General Error: {e}")
 
 
-# --- 🚀 FINAL MAIN SYNCHRONOUS FUNCTION ---
+# --- IMPORTS KE BAAD, AUR BAARI BAARI FUNCTIONS KE BAAD ---
+# ... (Apka poora bot code yahan tak)
+# ...
+
+# Flask import karein
+from flask import Flask
+
+# Web app object banayein
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def hello_world():
+    """Render health check ke liye simple OK response."""
+    return 'Bot is running (Polling mode).', 200
+
+# --- 🚀 FINAL MAIN SYNCHRONOUS FUNCTION (Ise chota karna hoga) ---
+# Main function mein bada badlav nahi, bas run polling ko start karein
 def main(): 
     if not TOKEN or not CHAT_ID:
         print("FATAL ERROR: TELEGRAM_BOT_TOKEN ya TELEGRAM_CHAT_ID environment variable set nahi hai.")
@@ -146,10 +162,9 @@ def main():
     # PTB v20.x Application
     application = Application.builder().token(TOKEN).build()
     
-    # Handlers add karein
     application.add_handler(CommandHandler("start", start_command))
     
-    # BackgroundScheduler: Yeh Event Loop error ko theek karta hai
+    # BackgroundScheduler (Same as before)
     scheduler = BackgroundScheduler() 
     scheduler.add_job(
         send_periodic_quiz, 
@@ -158,14 +173,22 @@ def main():
         kwargs={'context': application}, 
         id='periodic_quiz_job'
     )
-    
-    # Scheduler ko start karein
     scheduler.start()
     
     print("Bot started and scheduler active (har 15 minute mein).")
     
-    # run_polling() synchronous hai aur bot ko chalata rahega
-    application.run_polling(poll_interval=3.0, allowed_updates=Update.ALL_TYPES)
+    # run_polling() ko naye thread mein chalao taaki main thread web server ke liye free ho jaaye
+    # Bot ko start karne ke liye ek alag thread shuru karein
+    import threading
+    bot_thread = threading.Thread(target=application.run_polling, kwargs={'poll_interval': 3.0, 'allowed_updates': Update.ALL_TYPES})
+    bot_thread.start()
+    
+    # Main thread ab Flask server chalaegi
+    # Render environment se port number lein, default 8080 agar nahi mila toh
+    port = int(os.environ.get('PORT', 8080))
+    print(f"Flask running on port {port} for Render health check.")
+    # Flask ko ab chala dein (Yeh Render ke liye zaroori hai)
+    web_app.run(host='0.0.0.0', port=port)
 
 
 if __name__ == '__main__':
