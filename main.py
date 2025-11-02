@@ -115,39 +115,45 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
         print(f"General Error: {e}")
 
 # --- 🚀 FINAL MAIN ASYNC FUNCTION ---
-# --- 🚀 FINAL MAIN ASYNC FUNCTION ---
-async def main(): 
+# ... (Baaki saara code, imports, functions, sab same rahenge)
+
+# --- 🚀 FINAL MAIN SYNCHRONOUS FUNCTION ---
+# Ab main function async nahi rahega
+def main(): 
     if not TOKEN or not CHAT_ID:
         print("FATAL ERROR: TELEGRAM_BOT_TOKEN ya TELEGRAM_CHAT_ID environment variable set nahi hai.")
         return
 
     application = Application.builder().token(TOKEN).build()
     
+    # Handlers add karein (Commands, Messages)
     application.add_handler(CommandHandler("start", start_command))
     
-    # Scheduler ko application ke saath attach karein
+    # Scheduler ko application ke loop se alag rakhte hain (Simple Sync Scheduler)
+    # Taki Event Loop ka takrav na ho
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
+        # Context ko seedhe pass na karke, application se fetch karenge
         send_periodic_quiz, 
         'interval', 
         seconds=900,  
+        # Context ko application object se hi fetch karna padega
         kwargs={'context': application}, 
         id='periodic_quiz_job'
     )
     
-    # Scheduler ko start karein. Ab yeh Application ke loop mein chalega.
+    # Scheduler ko start karein
     scheduler.start()
     
     print("Bot started and scheduler active (har 15 minute mein).")
     
-    # FINAL FIX: run_polling ki jagah run_bufferless() ka use karein.
-    # Yeh blocking call hai aur background worker ke liye sahi hai.
-    await application.run_bufferless() 
+    # Synchronous call jo blocking hai aur bot ko chalata rahega
+    application.run_polling(poll_interval=3.0, allowed_updates=Update.ALL_TYPES)
+
 
 if __name__ == '__main__':
     try:
-        # asyncio.run() se main() ko chalao
-        asyncio.run(main())
+        # Ab seedhe synchronous main() ko chalaenge
+        main() 
     except (KeyboardInterrupt, SystemExit):
-        # Graceful exit ke liye
         print("Bot shutdown gracefully.")
