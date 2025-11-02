@@ -7,9 +7,9 @@ import random
 import os
 import asyncio
 from datetime import datetime
-import html # HTML entities ko decode karne ke liye
+import html 
 
-# --- ⚙️ Zaroori Variables ---
+# --- ⚙️ Zaroori Variables (Aapke original code se) ---
 TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
@@ -20,33 +20,27 @@ LANG_MAP = {
     "বাংলা 🇧🇩": 'bn'
 }
 
-# Simple translation function using Google's free unofficial endpoint
-# NOTE: Yeh official API nahi hai, Render par high load se yeh fail ho sakta hai.
+# Simple translation function (Jaisa pichle answer mein tha)
 def translate_text(text, dest_lang):
     if dest_lang == 'en':
         return text
     
-    # Google Translate API ka free unofficial endpoint
     TRANSLATE_URL = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl={dest_lang}&dt=t&q={requests.utils.quote(text)}"
     
     try:
         response = requests.get(TRANSLATE_URL, timeout=5)
         response.raise_for_status()
         data = response.json()
-        
-        # Translation result nikalna
         translated_text = "".join(item[0] for item in data[0])
         return translated_text
         
     except Exception as e:
-        print(f"Simple Translation Error to {dest_lang}: {e}")
-        return text # Translation fail hone par original text wapas kar do
+        # print(f"Simple Translation Error to {dest_lang}: {e}") # Log hata diya
+        return text 
 
-# --- 🎯 COMMANDS ---
-
+# --- 🎯 COMMANDS (Same as before) ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Bot start hone par bhasha chune ka option deta hai (group chat ke liye nahi)."""
-    # Group me start command ko ignore karna behtar hai
+    # ... (Function code same rahega)
     if update.effective_chat.type in [telegram.constants.ChatType.GROUP, telegram.constants.ChatType.SUPERGROUP]:
         await update.message.reply_text("Quiz har 15 minute mein yahan automatic aayega.")
         return
@@ -59,7 +53,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
     
-# --- 📣 QUIZ POST KARNE KA MAIN FUNCTION ---
+# --- 📣 QUIZ POST KARNE KA MAIN FUNCTION (Same as before) ---
 async def send_periodic_quiz(context: ContextTypes.DEFAULT_TYPE):
     """Har 15 minute mein Open Trivia DB se naya sawal fetch karke teeno bhashaon mein bhejta hai."""
     
@@ -67,21 +61,17 @@ async def send_periodic_quiz(context: ContextTypes.DEFAULT_TYPE):
         print("Error: CHAT_ID is not set.")
         return
         
-    # Sirf un languages mein bhejo jo hamare pass hain
     languages_to_send = ['en', 'hi', 'bn'] 
 
     for lang_code in languages_to_send:
         await fetch_and_send_quiz(context, CHAT_ID, lang_code)
-        await asyncio.sleep(5) # API rate limit se bachne ke liye delay
+        await asyncio.sleep(5) 
 
 async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_code):
-    """API se sawal fetch karta hai aur di gayi bhasha mein translate karke bhejta hai."""
-    
-    # URL encoded data fetch karne ke liye
+    # ... (Function code same rahega)
     TRIVIA_API_URL = "https://opentdb.com/api.php?amount=1&type=multiple&encode=url_legacy"
     
     try:
-        # 1. API se English question fetch karna
         response = requests.get(TRIVIA_API_URL)
         response.raise_for_status() 
         data = response.json()
@@ -92,17 +82,14 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
 
         question_data = data['results'][0]
         
-        # HTML entities aur URL encoding decode karna
         question_text = html.unescape(requests.utils.unquote(question_data['question']))
         correct_answer = html.unescape(requests.utils.unquote(question_data['correct_answer']))
         incorrect_answers = [html.unescape(requests.utils.unquote(ans)) for ans in question_data['incorrect_answers']]
         
-        # 2. Translation karna
         translated_question = translate_text(question_text, lang_code)
         translated_correct = translate_text(correct_answer, lang_code)
         translated_incorrect = [translate_text(ans, lang_code) for ans in incorrect_answers]
         
-        # 3. Options set karna
         all_options = translated_incorrect + [translated_correct]
         random.shuffle(all_options)
         
@@ -110,12 +97,11 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
         
         explanation = translate_text(f"Correct Answer is: {correct_answer}", lang_code) 
 
-        # 4. Quiz Poll bhejte hain
         await context.bot.send_poll(
             chat_id=chat_id,
             question=translated_question,
             options=all_options,
-            type=telegram.constants.PollType.QUIZ,
+            type=constants.PollType.QUIZ,
             correct_option_id=correct_option_id,
             explanation=explanation,
             is_anonymous=True, 
@@ -128,34 +114,38 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
     except Exception as e:
         print(f"General Error: {e}")
 
-
-# --- 🚀 MAIN FUNCTION ---
-def main():
+# --- 🚀 FINAL MAIN ASYNC FUNCTION ---
+async def main(): # <--- Yahan 'async' add kiya gaya
     if not TOKEN or not CHAT_ID:
         print("FATAL ERROR: TELEGRAM_BOT_TOKEN ya TELEGRAM_CHAT_ID environment variable set nahi hai.")
         return
 
-    # PTB v20.x Application
     application = Application.builder().token(TOKEN).build()
     
-    # Commands aur Messages
     application.add_handler(CommandHandler("start", start_command))
     
-    # Scheduler set karna
+    # Scheduler ko application ke saath attach karein
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
         send_periodic_quiz, 
         'interval', 
-        seconds=900,  # Har 15 minute (900 seconds)
+        seconds=900,  
         kwargs={'context': application}, 
         id='periodic_quiz_job'
     )
+    
+    # Scheduler ko start karein. Ab yeh Application ke loop mein chalega.
     scheduler.start()
     
-    print("Bot started and scheduler active.")
+    print("Bot started and scheduler active (har 15 minute mein).")
     
-    # application.run_polling() ki jagah hum run_non_blocking use karenge Render Worker ke liye
-    application.run_polling(poll_interval=3.0) 
+    # Run the bot. Yeh blocking call hai aur Event Loop shuru karta hai.
+    await application.run_polling(poll_interval=3.0) # <--- Yahan 'await' add kiya gaya
 
 if __name__ == '__main__':
-    main()
+    try:
+        # Aur yahan 'asyncio.run()' ka use kiya gaya
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        # Graceful exit ke liye
+        print("Bot shutdown gracefully.")
