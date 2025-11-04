@@ -5,14 +5,13 @@ import requests
 import random
 import os
 import asyncio
-from datetime import datetime
 import html 
 import logging 
 
 # --- ⚙️ Constants and Setup ---
 QUIZ_TRIGGER_COUNT = 10 # Har 10 message ke baad quiz bheja jaayega
 MESSAGE_COUNTER_KEY = 'message_count'
-LOCK_KEY = 'quiz_in_progress' # Naya lock key
+LOCK_KEY = 'quiz_in_progress' 
 
 # Logging Setup
 logging.basicConfig(
@@ -26,56 +25,27 @@ TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL') 
 
-# Bhashaon ki mapping
-LANG_MAP = {
-    "English 🇬🇧": 'en',
-    "Hindi 🇮🇳": 'hi',
-    "বাংলা 🇧🇩": 'bn'
-}
-
-# --- Translation Function ---
-def translate_text(text, dest_lang):
-    """Open Trivia DB के English text को Hindi/Bengali mein translate karta hai।"""
-    if dest_lang == 'en':
-        return text
-    
-    TRANSLATE_URL = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl={dest_lang}&dt=t&q={requests.utils.quote(text)}"
-    
-    try:
-        # Translation ke liye chhota timeout
-        response = requests.get(TRANSLATE_URL, timeout=3) 
-        response.raise_for_status()
-        data = response.json()
-        translated_text = "".join(item[0] for item in data[0])
-        return translated_text
-        
-    except Exception as e:
-        logger.error(f"Translation Error to {dest_lang}: {e}")
-        return text 
+# --- ❌ Translation Function Removed ---
 
 # --- 🎯 COMMANDS ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Bot start hone par bhasha chune ka option deta hai."""
+    """Bot start hone par welcome message deta hai."""
     
     if update.effective_chat.type in [telegram.constants.ChatType.GROUP, telegram.constants.ChatType.SUPERGROUP]:
         await update.message.reply_text(
-            f"Quiz shuru hai! Har **{QUIZ_TRIGGER_COUNT}** messages ke baad naya quiz automatic aayega. Apni baat-cheet jaari rakhein! 🥳"
+            f"Welcome! This is an English-only Quiz Bot. A new quiz will automatically appear every **{QUIZ_TRIGGER_COUNT}** messages. Keep the conversation going! 🥳"
         )
         return
 
-    keyboard = [[lang for lang in LANG_MAP.keys()]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    
     await update.message.reply_text(
-        "Namaskar! Please select your preferred language for the Quiz (Note: Quiz group mein automatic aayega):",
-        reply_markup=reply_markup
+        "Welcome! This is an English-only Quiz Bot. The quiz will appear automatically in the group chat."
     )
 
-# --- 📣 QUIZ POST KARNE KA MAIN FUNCTION (Modified for Rate Limit) ---
+
+# --- 📣 QUIZ POST KARNE KA MAIN FUNCTION (Simplified) ---
 async def send_periodic_quiz(context: ContextTypes.DEFAULT_TYPE):
     """
-    Message counter se trigger hone par Open Trivia DB se sawal fetch karke teeno bhashaon mein bhejta hai.
-    API Rate Limit se bachne ke liye har bhasha ke beech delay hai.
+    Message counter se trigger hone par Open Trivia DB se sawal fetch karke sirf English mein bhejta hai.
     """
     
     chat_id = CHAT_ID
@@ -86,28 +56,23 @@ async def send_periodic_quiz(context: ContextTypes.DEFAULT_TYPE):
         logger.error("CHAT_ID not available to send the quiz.")
         return
         
-    languages_to_send = ['en', 'hi', 'bn'] 
+    # Sirf English mein bhej rahe hain, koi loop nahi
+    await fetch_and_send_quiz(context, chat_id)
+    
 
-    for i, lang_code in enumerate(languages_to_send):
-        await fetch_and_send_quiz(context, chat_id, lang_code)
-        
-        # 💡 API Rate Limit (429) se bachne ke liye delay (2.5 seconds)
-        if i < len(languages_to_send) - 1:
-            logger.info(f"Waiting 4.0 seconds to respect OpenTDB API limit before sending {languages_to_send[i+1]} quiz...")
-            await asyncio.sleep(4.0) 
-
-async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_code):
-    """API se sawal fetch karta hai aur di gayi bhasha mein translate karke bhejta hai।"""
+async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id):
+    """API se English sawal fetch karta hai aur bhejta hai।"""
     
     TRIVIA_API_URL = "https://opentdb.com/api.php?amount=1&type=multiple&encode=url_legacy"
     
     try:
-        response = requests.get(TRIVIA_API_URL, timeout=3)
+        # Single API call, so no 429 error expected now
+        response = requests.get(TRIVIA_API_URL, timeout=5)
         response.raise_for_status() 
         data = response.json()
         
         if data['response_code'] != 0 or not data['results']:
-            logger.warning(f"API se sawal fetch nahi ho paya for {lang_code}.")
+            logger.warning(f"API se sawal fetch nahi ho paya. Response Code: {data.get('response_code')}")
             return
 
         question_data = data['results'][0]
@@ -117,20 +82,16 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
         correct_answer = html.unescape(requests.utils.unquote(question_data['correct_answer']))
         incorrect_answers = [html.unescape(requests.utils.unquote(ans)) for ans in question_data['incorrect_answers']]
         
-        # Translation
-        translated_question = translate_text(question_text, lang_code)
-        translated_correct = translate_text(correct_answer, lang_code)
-        translated_incorrect = [translate_text(ans, lang_code) for ans in incorrect_answers]
-        
-        all_options = translated_incorrect + [translated_correct]
+        # Options
+        all_options = incorrect_answers + [correct_answer]
         random.shuffle(all_options)
-        correct_option_id = all_options.index(translated_correct)
-        explanation = translate_text(f"Correct Answer: {correct_answer}", lang_code) 
+        correct_option_id = all_options.index(correct_answer)
+        explanation = f"Correct Answer: {correct_answer}" 
 
         # Quiz Poll bhejte hain
         await context.bot.send_poll(
             chat_id=chat_id,
-            question=translated_question,
+            question=question_text,
             options=all_options,
             type=constants.PollType.QUIZ,
             correct_option_id=correct_option_id,
@@ -138,15 +99,14 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
             is_anonymous=True, 
             open_period=600 # 10 minutes
         )
-        logger.info(f"Quiz sent in {lang_code} to {chat_id}: '{translated_question[:30]}...'")
+        logger.info(f"English Quiz sent to {chat_id}: '{question_text[:30]}...'")
         
     except requests.exceptions.HTTPError as e:
         logger.error(f"API Request Error: {e}")
-        # Agar 429 aaye to aage badho (delay ki wajah se chances kam honge)
     except Exception as e:
         logger.error(f"General Error during quiz send: {e}")
 
-# --- 🎯 Message Counter Logic (Modified for Lock) ---
+# --- 🎯 Message Counter Logic (No change in logic, only in function call) ---
 async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Har incoming message ko ginta hai. Lock system ka upyog karta hai taki ek baar mein ek hi quiz send ho.
@@ -172,12 +132,12 @@ async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAU
         chat_data[LOCK_KEY] = True 
         
         try:
-            # Quiz bhejein - ismein ab delay shamil hai
+            # Quiz bhejein - Ab yeh bahut tez hoga!
             await send_periodic_quiz(context) 
         except Exception as e:
             logger.error(f"Error during overall quiz send process: {e}")
         finally:
-            # 5. Lock hatayein aur counter reset karein, chahe quiz fail ho ya pass
+            # 5. Lock hatayein aur counter reset karein
             chat_data[MESSAGE_COUNTER_KEY] = 0
             chat_data[LOCK_KEY] = False 
             logger.info("Quiz process finished and counter reset to 0.")
