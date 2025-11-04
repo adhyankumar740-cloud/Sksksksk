@@ -93,8 +93,8 @@ async def send_periodic_quiz(context: ContextTypes.DEFAULT_TYPE):
         
         # 💡 API Rate Limit (429) se bachne ke liye delay (2.5 seconds)
         if i < len(languages_to_send) - 1:
-            logger.info(f"Waiting 2.5 seconds to respect OpenTDB API limit before sending {languages_to_send[i+1]} quiz...")
-            await asyncio.sleep(2.5) 
+            logger.info(f"Waiting 4.0 seconds to respect OpenTDB API limit before sending {languages_to_send[i+1]} quiz...")
+            await asyncio.sleep(4.0) 
 
 async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_code):
     """API se sawal fetch karta hai aur di gayi bhasha mein translate karke bhejta hai।"""
@@ -102,7 +102,7 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
     TRIVIA_API_URL = "https://opentdb.com/api.php?amount=1&type=multiple&encode=url_legacy"
     
     try:
-        response = requests.get(TRIVIA_API_URL, timeout=5)
+        response = requests.get(TRIVIA_API_URL, timeout=3)
         response.raise_for_status() 
         data = response.json()
         
