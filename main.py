@@ -1,7 +1,6 @@
 import telegram
 from telegram import Update, constants, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
-# apscheduler ko hata diya gaya hai kyunki hum Webhook aur message counter use kar rahe hain
 import requests
 import random
 import os
@@ -13,6 +12,7 @@ import logging
 # --- ⚙️ Constants and Setup ---
 QUIZ_TRIGGER_COUNT = 10 # Har 10 message ke baad quiz bheja jaayega
 MESSAGE_COUNTER_KEY = 'message_count'
+LOCK_KEY = 'quiz_in_progress' # Naya lock key
 
 # Logging Setup
 logging.basicConfig(
@@ -35,7 +35,7 @@ LANG_MAP = {
 
 # --- Translation Function ---
 def translate_text(text, dest_lang):
-    """Open Trivia DB के English text को Hindi/Bengali में translate करता है।"""
+    """Open Trivia DB के English text को Hindi/Bengali mein translate karta hai।"""
     if dest_lang == 'en':
         return text
     
@@ -46,7 +46,6 @@ def translate_text(text, dest_lang):
         response = requests.get(TRANSLATE_URL, timeout=3) 
         response.raise_for_status()
         data = response.json()
-        # Data structure ko sambhalte hue
         translated_text = "".join(item[0] for item in data[0])
         return translated_text
         
@@ -58,14 +57,12 @@ def translate_text(text, dest_lang):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Bot start hone par bhasha chune ka option deta hai."""
     
-    # Groups/Supergroups mein simple reply
     if update.effective_chat.type in [telegram.constants.ChatType.GROUP, telegram.constants.ChatType.SUPERGROUP]:
         await update.message.reply_text(
-            f"Quiz shuru hai! Har {QUIZ_TRIGGER_COUNT} messages ke baad naya quiz automatic aayega. Apni baat-cheet jaari rakhein! 🥳"
+            f"Quiz shuru hai! Har **{QUIZ_TRIGGER_COUNT}** messages ke baad naya quiz automatic aayega. Apni baat-cheet jaari rakhein! 🥳"
         )
         return
 
-    # Private chat mein language option
     keyboard = [[lang for lang in LANG_MAP.keys()]]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     
@@ -74,13 +71,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# --- 📣 QUIZ POST KARNE KA MAIN FUNCTION ---
+# --- 📣 QUIZ POST KARNE KA MAIN FUNCTION (Modified for Rate Limit) ---
 async def send_periodic_quiz(context: ContextTypes.DEFAULT_TYPE):
-    """Message counter se trigger hone par Open Trivia DB se sawal fetch karke teeno bhashaon mein bhejta hai."""
+    """
+    Message counter se trigger hone par Open Trivia DB se sawal fetch karke teeno bhashaon mein bhejta hai.
+    API Rate Limit se bachne ke liye har bhasha ke beech delay hai.
+    """
     
-    # Agar chat_id set hai to wahan bhejenge, warna context se lenge
     chat_id = CHAT_ID
-    # Agar chat_id environment variable set nahi hai, to group chat se lein (agar group mein trigger hua hai)
     if not chat_id and context._chat_id:
         chat_id = context._chat_id 
         
@@ -90,13 +88,16 @@ async def send_periodic_quiz(context: ContextTypes.DEFAULT_TYPE):
         
     languages_to_send = ['en', 'hi', 'bn'] 
 
-    for lang_code in languages_to_send:
+    for i, lang_code in enumerate(languages_to_send):
         await fetch_and_send_quiz(context, chat_id, lang_code)
-        # Webhook timeout se bachne ke liye chhota delay (ya hatayein)
-        await asyncio.sleep(0.5) 
+        
+        # 💡 API Rate Limit (429) se bachne ke liye delay (2.5 seconds)
+        if i < len(languages_to_send) - 1:
+            logger.info(f"Waiting 2.5 seconds to respect OpenTDB API limit before sending {languages_to_send[i+1]} quiz...")
+            await asyncio.sleep(2.5) 
 
 async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_code):
-    """API se sawal fetch karta hai aur di gayi bhasha mein translate karke bhejta hai."""
+    """API se sawal fetch karta hai aur di gayi bhasha mein translate karke bhejta hai।"""
     
     TRIVIA_API_URL = "https://opentdb.com/api.php?amount=1&type=multiple&encode=url_legacy"
     
@@ -111,7 +112,7 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
 
         question_data = data['results'][0]
         
-        # Decode URL-encoded text and unescape HTML entities
+        # Decode and unescape
         question_text = html.unescape(requests.utils.unquote(question_data['question']))
         correct_answer = html.unescape(requests.utils.unquote(question_data['correct_answer']))
         incorrect_answers = [html.unescape(requests.utils.unquote(ans)) for ans in question_data['incorrect_answers']]
@@ -123,9 +124,7 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
         
         all_options = translated_incorrect + [translated_correct]
         random.shuffle(all_options)
-        
         correct_option_id = all_options.index(translated_correct)
-        
         explanation = translate_text(f"Correct Answer: {correct_answer}", lang_code) 
 
         # Quiz Poll bhejte hain
@@ -141,52 +140,60 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
         )
         logger.info(f"Quiz sent in {lang_code} to {chat_id}: '{translated_question[:30]}...'")
         
-    except requests.exceptions.RequestException as e:
+    except requests.exceptions.HTTPError as e:
         logger.error(f"API Request Error: {e}")
+        # Agar 429 aaye to aage badho (delay ki wajah se chances kam honge)
     except Exception as e:
         logger.error(f"General Error during quiz send: {e}")
 
-# --- 🎯 Message Counter Logic ---
+# --- 🎯 Message Counter Logic (Modified for Lock) ---
 async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Har incoming message (jo command nahi hai) ko ginta hai aur QUIZ_TRIGGER_COUNT ke baad quiz bhejta hai.
+    Har incoming message ko ginta hai. Lock system ka upyog karta hai taki ek baar mein ek hi quiz send ho.
     """
     
     chat_data = context.chat_data
     
-    # Counter fetch karein, agar nahi hai to 0 se shuru karein
+    # 1. Lock check karein
+    if chat_data.get(LOCK_KEY, False):
+        logger.info("Quiz already in progress. Ignoring message count until process finishes.")
+        return 
+        
+    # 2. Counter fetch aur update karein
     count = chat_data.get(MESSAGE_COUNTER_KEY, 0)
-    
-    # Counter badhaayein
     chat_data[MESSAGE_COUNTER_KEY] = count + 1
     logger.info(f"Message Count in chat {update.effective_chat.id}: {chat_data[MESSAGE_COUNTER_KEY]}")
 
-    # Condition check karein
+    # 3. Condition check karein
     if chat_data[MESSAGE_COUNTER_KEY] >= QUIZ_TRIGGER_COUNT:
-        logger.info(f"Quiz trigger limit reached ({QUIZ_TRIGGER_COUNT}). Sending quiz.")
+        logger.info(f"Quiz trigger limit reached ({QUIZ_TRIGGER_COUNT}). Starting quiz process.")
         
-        # Quiz bhejein
-        # Hamara send_periodic_quiz function ContextTypes.DEFAULT_TYPE object expect karta hai.
-        await send_periodic_quiz(context) 
+        # 4. Lock set karein
+        chat_data[LOCK_KEY] = True 
         
-        # Counter ko reset karein
-        chat_data[MESSAGE_COUNTER_KEY] = 0
-        logger.info("Message counter reset to 0.")
+        try:
+            # Quiz bhejein - ismein ab delay shamil hai
+            await send_periodic_quiz(context) 
+        except Exception as e:
+            logger.error(f"Error during overall quiz send process: {e}")
+        finally:
+            # 5. Lock hatayein aur counter reset karein, chahe quiz fail ho ya pass
+            chat_data[MESSAGE_COUNTER_KEY] = 0
+            chat_data[LOCK_KEY] = False 
+            logger.info("Quiz process finished and counter reset to 0.")
         
 # --- 🚀 MAIN EXECUTION FUNCTION (Webhook/Render ke liye) ---
 def main(): 
     if not TOKEN or not CHAT_ID or not WEBHOOK_URL:
-        logger.critical("FATAL ERROR: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ya RENDER_EXTERNAL_URL environment variable set nahi hai.")
-        # Agar koi variable missing hai, to bot ko band kar dein
+        logger.critical("FATAL ERROR: Environment variables set nahi hain. Check TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, aur RENDER_EXTERNAL_URL.")
         return
 
-    # User data aur chat data ko enable karein
     application = Application.builder().token(TOKEN).concurrent_updates(True).build()
     
     # Handlers add karein
     application.add_handler(CommandHandler("start", start_command))
     
-    # Message Handler: filters.TEXT & ~filters.COMMAND ka matlab hai, sirf plain text messages ko gino, commands ko nahi.
+    # Message Handler: filters.TEXT & ~filters.COMMAND ka matlab hai, sirf plain text messages ko gino
     application.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
@@ -199,7 +206,6 @@ def main():
     
     logger.info("Bot starting with Webhook (Render mode)...")
     
-    # Webhook set karein
     application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
