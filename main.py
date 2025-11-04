@@ -6,9 +6,10 @@ import requests
 import random
 import os
 import asyncio
+import threading # <-- Threading ki zaroorat hai Web Service ke liye
 from datetime import datetime
 import html 
-from flask import Flask # Flask must be imported for Web Service
+from flask import Flask 
 
 # --- ⚙️ Zaroori Variables ---
 TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
@@ -24,8 +25,9 @@ LANG_MAP = {
     "বাংলা 🇧🇩": 'bn'
 }
 
-# --- Translation Function (Same as before) ---
+# --- Translation and Quiz Functions (Same as before) ---
 def translate_text(text, dest_lang):
+    # ... (same translation logic)
     if dest_lang == 'en':
         return text
     
@@ -41,8 +43,8 @@ def translate_text(text, dest_lang):
     except Exception as e:
         return text 
 
-# --- 🎯 COMMANDS (Same as before) ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ... (same command logic)
     if update.effective_chat.type in [telegram.constants.ChatType.GROUP, telegram.constants.ChatType.SUPERGROUP]:
         await update.message.reply_text("Quiz har 15 minute mein yahan automatic aayega.")
         return
@@ -55,8 +57,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# --- 📣 QUIZ POST KARNE KA MAIN FUNCTION (Same as before) ---
 async def send_periodic_quiz(context: ContextTypes.DEFAULT_TYPE):
+    # ... (same quiz scheduler logic)
     if not CHAT_ID:
         print("Error: TELEGRAM_CHAT_ID is not set.")
         return
@@ -68,6 +70,7 @@ async def send_periodic_quiz(context: ContextTypes.DEFAULT_TYPE):
         await asyncio.sleep(5) 
 
 async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_code):
+    # ... (same fetch logic)
     TRIVIA_API_URL = "https://opentdb.com/api.php?amount=1&type=multiple&encode=url_legacy"
     
     try:
@@ -113,19 +116,27 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
     except Exception as e:
         print(f"General Error: {e}")
 
+
 # --- 🌐 FLASK HEALTH CHECK ROUTE ---
 @web_app.route('/')
 def health_check():
     """Render ko OK response dene ke liye."""
-    return 'Telegram Bot is running (Web Service Mode).', 200
+    # Yahan hum check karte hain ki Bot thread chal raha hai ya nahi
+    if 'bot_thread' in web_app.config and web_app.config['bot_thread'].is_alive():
+        return 'Telegram Bot Polling is Active.', 200
+    else:
+        # Agar bot thread crash ho gaya to 503 denge
+        return 'Telegram Bot Polling is DOWN.', 503
 
-# --- 🏃 ASYNC ENTRY POINT FOR POLLING ---
-# Polling ko async function banao, jisse isko event loop mil sake
-async def start_polling(application: Application):
-    """PTB polling shuru karta hai."""
-    # run_polling() ko await kiya gaya
-    await application.run_polling(poll_interval=3.0, allowed_updates=Update.ALL_TYPES)
-
+# --- 🏃 BOT POLLING FUNCTION (Alag Thread mein chalega) ---
+def run_bot_polling(application: Application):
+    """PTB application ko synchronous polling mode mein chalata hai."""
+    print("Starting bot polling in new thread...")
+    try:
+        # run_polling() ko ek naye thread mein chalane se Event Loop ki problem avoid ho jaati hai
+        application.run_polling(poll_interval=3.0, allowed_updates=Update.ALL_TYPES)
+    except Exception as e:
+        print(f"FATAL BOT POLLING ERROR: {e}")
 
 # --- 🚀 FINAL MAIN FUNCTION (Web Service) ---
 def main(): 
@@ -136,7 +147,7 @@ def main():
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start_command))
     
-    # BackgroundScheduler: Ab yeh Polling loop ke saath theek se chalega
+    # BackgroundScheduler (Polling Loop ke saath chalega)
     scheduler = BackgroundScheduler() 
     scheduler.add_job(
         send_periodic_quiz, 
@@ -146,17 +157,18 @@ def main():
         id='periodic_quiz_job'
     )
     scheduler.start()
-    print("Bot started and scheduler active.")
+    print("Scheduler active.")
 
-    # 1. Polling Task ko alag se shuru karein (Non-blocking)
-    # naya loop banao
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    # 1. Bot Polling ko alag Thread mein chalao
+    bot_thread = threading.Thread(target=run_bot_polling, args=(application,))
+    bot_thread.daemon = True # Main process exit hone par thread bhi exit ho jaayega
+    bot_thread.start()
     
-    # run_polling ko background task ke roop mein chalao
-    loop.run_until_complete(loop.create_task(start_polling(application)))
+    # Bot thread ko Flask config mein store karo health check ke liye
+    web_app.config['bot_thread'] = bot_thread
+    print("Telegram Polling started in a separate thread.")
 
-    # 2. Main thread ab Flask server chalaegi
+    # 2. Main thread ab Flask server chalaegi (Port open karne ke liye)
     port = int(os.environ.get('PORT', 8080))
     print(f"Flask running on port {port} for Render health check.")
     
