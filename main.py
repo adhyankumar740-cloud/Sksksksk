@@ -8,10 +8,14 @@ import os
 import asyncio
 from datetime import datetime
 import html 
+from flask import Flask # Flask must be imported for Web Service
 
-# --- ⚙️ Zaroori Variables (Set these in Render Environment) ---
+# --- ⚙️ Zaroori Variables ---
 TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
+
+# Flask web app object
+web_app = Flask(__name__) 
 
 # Bhashaon ki mapping
 LANG_MAP = {
@@ -37,7 +41,7 @@ def translate_text(text, dest_lang):
     except Exception as e:
         return text 
 
-# --- 🎯 COMMANDS ---
+# --- 🎯 COMMANDS (Same as before) ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type in [telegram.constants.ChatType.GROUP, telegram.constants.ChatType.SUPERGROUP]:
         await update.message.reply_text("Quiz har 15 minute mein yahan automatic aayega.")
@@ -51,7 +55,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# --- 📣 QUIZ POST KARNE KA MAIN FUNCTION ---
+# --- 📣 QUIZ POST KARNE KA MAIN FUNCTION (Same as before) ---
 async def send_periodic_quiz(context: ContextTypes.DEFAULT_TYPE):
     if not CHAT_ID:
         print("Error: TELEGRAM_CHAT_ID is not set.")
@@ -109,31 +113,55 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
     except Exception as e:
         print(f"General Error: {e}")
 
-# --- 🚀 FINAL MAIN SYNCHRONOUS FUNCTION ---
+# --- 🌐 FLASK HEALTH CHECK ROUTE ---
+@web_app.route('/')
+def health_check():
+    """Render ko OK response dene ke liye."""
+    return 'Telegram Bot is running (Web Service Mode).', 200
+
+# --- 🏃 ASYNC ENTRY POINT FOR POLLING ---
+# Polling ko async function banao, jisse isko event loop mil sake
+async def start_polling(application: Application):
+    """PTB polling shuru karta hai."""
+    # run_polling() ko await kiya gaya
+    await application.run_polling(poll_interval=3.0, allowed_updates=Update.ALL_TYPES)
+
+
+# --- 🚀 FINAL MAIN FUNCTION (Web Service) ---
 def main(): 
     if not TOKEN or not CHAT_ID:
-        print("FATAL ERROR: TELEGRAM_BOT_TOKEN ya TELEGRAM_CHAT_ID environment variable set nahi hai.")
+        print("FATAL ERROR: Environment variables set nahi hain.")
         return
 
     application = Application.builder().token(TOKEN).build()
-    
     application.add_handler(CommandHandler("start", start_command))
     
-    # BackgroundScheduler अब main thread में चलेगा, run_polling के साथ
+    # BackgroundScheduler: Ab yeh Polling loop ke saath theek se chalega
     scheduler = BackgroundScheduler() 
     scheduler.add_job(
         send_periodic_quiz, 
         'interval', 
-        seconds=60,  
+        seconds=900,  
         kwargs={'context': application}, 
         id='periodic_quiz_job'
     )
     scheduler.start()
+    print("Bot started and scheduler active.")
+
+    # 1. Polling Task ko alag se shuru karein (Non-blocking)
+    # naya loop banao
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     
-    print("Bot started and scheduler active (har 15 minute mein).")
+    # run_polling ko background task ke roop mein chalao
+    loop.run_until_complete(loop.create_task(start_polling(application)))
+
+    # 2. Main thread ab Flask server chalaegi
+    port = int(os.environ.get('PORT', 8080))
+    print(f"Flask running on port {port} for Render health check.")
     
-    # run_polling() को सीधे main thread में चलाएँगे
-    application.run_polling(poll_interval=3.0, allowed_updates=Update.ALL_TYPES)
+    # use_reloader=False Render par zaruri hai
+    web_app.run(host='0.0.0.0', port=port, use_reloader=False)
 
 
 if __name__ == '__main__':
