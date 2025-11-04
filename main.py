@@ -119,7 +119,7 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
             correct_option_id=correct_option_id,
             explanation=explanation,
             is_anonymous=True, 
-            open_period=900 # 15 minutes
+            open_period=60 # 15 minutes
         )
         logger.info(f"Quiz sent in {lang_code}: '{translated_question[:30]}...'")
         
