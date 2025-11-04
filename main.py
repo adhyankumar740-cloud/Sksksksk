@@ -6,16 +6,12 @@ import requests
 import random
 import os
 import asyncio
-import concurrent.futures # <-- Naya Import
 from datetime import datetime
 import html 
-from flask import Flask # <-- Naya Import
 
-# --- ⚙️ Zaroori Variables ---
+# --- ⚙️ Zaroori Variables (Set these in Render Environment) ---
 TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
-# Flask web server ke liye
-web_app = Flask(__name__) 
 
 # Bhashaon ki mapping
 LANG_MAP = {
@@ -39,7 +35,6 @@ def translate_text(text, dest_lang):
         return translated_text
         
     except Exception as e:
-        # Translation fail hone par original text wapas kar do
         return text 
 
 # --- 🎯 COMMANDS ---
@@ -114,32 +109,17 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id, lang_
     except Exception as e:
         print(f"General Error: {e}")
 
-# --- 🌐 FLASK HEALTH CHECK ROUTE ---
-@web_app.route('/')
-def health_check():
-    """Render ko OK response dene ke liye."""
-    return 'Telegram Bot Polling and Web Server is running.', 200
-
-
-# --- 🏃 BOT POLLING FUNCTION (Alag process mein chalega) ---
-def run_bot_polling(application: Application):
-    """PTB application ko synchronous polling mode mein chalata hai."""
-    try:
-        application.run_polling(poll_interval=3.0, allowed_updates=Update.ALL_TYPES)
-    except Exception as e:
-        print(f"Bot Polling Error: {e}")
-
-# --- 🚀 FINAL MAIN FUNCTION ---
+# --- 🚀 FINAL MAIN SYNCHRONOUS FUNCTION ---
 def main(): 
     if not TOKEN or not CHAT_ID:
-        print("FATAL ERROR: Environment variables set nahi hain.")
+        print("FATAL ERROR: TELEGRAM_BOT_TOKEN ya TELEGRAM_CHAT_ID environment variable set nahi hai.")
         return
 
     application = Application.builder().token(TOKEN).build()
     
     application.add_handler(CommandHandler("start", start_command))
     
-    # BackgroundScheduler: Ab yeh Bot ke alag process mein chalega
+    # BackgroundScheduler अब main thread में चलेगा, run_polling के साथ
     scheduler = BackgroundScheduler() 
     scheduler.add_job(
         send_periodic_quiz, 
@@ -150,18 +130,10 @@ def main():
     )
     scheduler.start()
     
-    print("Bot started and scheduler active.")
+    print("Bot started and scheduler active (har 15 minute mein).")
     
-    # 1. Bot Polling ko alag Process mein chalao (Event Loop ke liye)
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    executor.submit(run_bot_polling, application)
-    print("Telegram Polling started in a separate thread.")
-    
-    # 2. Main thread ab Flask server chalaegi (Port open karne ke liye)
-    port = int(os.environ.get('PORT', 8080))
-    print(f"Flask running on port {port} for Render health check.")
-    # use_reloader=False Render par zaruri hai
-    web_app.run(host='0.0.0.0', port=port, use_reloader=False)
+    # run_polling() को सीधे main thread में चलाएँगे
+    application.run_polling(poll_interval=3.0, allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == '__main__':
