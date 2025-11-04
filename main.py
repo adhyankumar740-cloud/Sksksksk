@@ -63,7 +63,9 @@ async def send_periodic_quiz(context: ContextTypes.DEFAULT_TYPE):
 async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id):
     """API se English sawal fetch karta hai aur bhejta hai।"""
     
-    TRIVIA_API_URL = "https://opentdb.com/api.php?amount=1&type=multiple&encode=url_legacy"
+    # 💡 CHANGED: '&encode=url_legacy' parameter hata diya gaya hai. 
+    # Yeh Invalid Parameter (Code 2) error ko rokta hai aur API ko stable rakhta hai.
+    TRIVIA_API_URL = "https://opentdb.com/api.php?amount=1&type=multiple"
     
     try:
         # Single API call, so no 429 error expected now
@@ -71,13 +73,15 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id):
         response.raise_for_status() 
         data = response.json()
         
+        # ⚠️ NOTE: Response Code 1 (No Results) bhi aa sakta hai.
+        # Simple error handling for Code 1 and Code 2:
         if data['response_code'] != 0 or not data['results']:
-            logger.warning(f"API se sawal fetch nahi ho paya. Response Code: {data.get('response_code')}")
+            logger.warning(f"API se sawal fetch nahi ho paya. Response Code: {data.get('response_code')}. Please try again later.")
             return
 
         question_data = data['results'][0]
         
-        # Decode and unescape
+        # Decode and unescape (original logic still works for basic encoding)
         question_text = html.unescape(requests.utils.unquote(question_data['question']))
         correct_answer = html.unescape(requests.utils.unquote(question_data['correct_answer']))
         incorrect_answers = [html.unescape(requests.utils.unquote(ans)) for ans in question_data['incorrect_answers']]
@@ -105,7 +109,6 @@ async def fetch_and_send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id):
         logger.error(f"API Request Error: {e}")
     except Exception as e:
         logger.error(f"General Error during quiz send: {e}")
-
 # --- 🎯 Message Counter Logic (No change in logic, only in function call) ---
 async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
