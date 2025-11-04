@@ -124,7 +124,7 @@ def main():
     scheduler.add_job(
         send_periodic_quiz, 
         'interval', 
-        seconds=900,  
+        seconds=60,  
         kwargs={'context': application}, 
         id='periodic_quiz_job'
     )
