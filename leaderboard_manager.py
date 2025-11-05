@@ -349,7 +349,7 @@ async def leaderboard_callback(update: Update, context: CallbackContext):
         await query.edit_message_caption(caption="Database se connect nahi ho pa raha hai.")
         return
         
-    image_bytes = generate_leadeboard_image(title, data, chat_name) # 💡 Yahan bhi call hota hai
+    image_bytes = generate_leaderboard_image(title, data, chat_name) # 💡 Yahan bhi call hota hai
     caption_text = format_leaderboard_text(title, chat_name, data)
 
     keyboard = [
