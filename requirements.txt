@@ -2,3 +2,4 @@ python-telegram-bot[webhooks]==20.8
 requests
 flask==3.0.0
 psycopg2-binary
+Pillow
