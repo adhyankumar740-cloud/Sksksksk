@@ -24,9 +24,8 @@ GLOBAL_INTERVAL_MIN = 10
 # --- Placeholder for Video URLs ---
 # ⚠️ IMPORTANT: These must be Telegram File IDs or direct HTTPS URLs.
 WELCOME_VIDEO_URLS = [
-    "YOUR_TELEGRAM_VIDEO_FILE_ID_1", 
-    "YOUR_TELEGRAM_VIDEO_FILE_ID_2", 
-    "YOUR_TELEGRAM_VIDEO_FILE_ID_3"
+    "https://files.catbox.moe/4mjz8l.mp4", 
+    "https://files.catbox.moe/hxkkvt.mp4", 
 ]
 
 # Logging Setup (Same)
@@ -38,7 +37,7 @@ TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL') 
 
 
-# --- 🎯 COMMANDS ---
+# --- 🎯 COMMANDS
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Bot start hone par welcome message deta hai aur DM/Group ko register karta hai।"""
