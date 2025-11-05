@@ -1,7 +1,8 @@
+# main.py (Updated with Error Handler)
+
 import telegram
 from telegram import Update, constants
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
-import telegram.error # 💡 FIX 1: Import error handling
 import requests
 import random
 import os
@@ -9,6 +10,8 @@ import asyncio
 import html 
 from datetime import datetime
 import logging 
+import traceback # 💡 NEW: Import traceback
+import json # 💡 NEW: Import json
 
 # --- Import Leaderboard Manager ---
 import leaderboard_manager 
@@ -31,6 +34,39 @@ logger = logging.getLogger(__name__)
 
 TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL') 
+
+
+# --- 💡 NEW: Error Handler ---
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Logs the error and sends a message to the user."""
+    logger.error("Exception while handling an update:", exc_info=context.error)
+
+    # Prepare traceback
+    tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
+    tb_string = "".join(tb_list)
+
+    # Format the message
+    update_str = update.to_dict() if isinstance(update, Update) else str(update)
+    message = (
+        f"An exception was raised while handling an update\n"
+        f"<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}</pre>\n\n"
+        f"<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n"
+        f"<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n"
+        f"<pre>{html.escape(tb_string)}</pre>"
+    )
+
+    logger.error(message) # Log the full error
+    
+    # Send a simplified message to the user or group
+    if update and isinstance(update, Update) and update.effective_chat:
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="😕 Oops! Kuchh gadbad ho gayi. Maine developer ko report kar diya hai.",
+                parse_mode=constants.ParseMode.HTML
+            )
+        except Exception as e:
+            logger.error(f"Failed to send error message to chat: {e}")
 
 
 # --- 🎯 COMMANDS (Same) ---
@@ -93,7 +129,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 parse_mode=constants.ParseMode.MARKDOWN_V2
             )
 
-# --- 📣 QUIZ LOGIC (Corrected) ---
+# --- 📣 QUIZ LOGIC (Same) ---
 
 async def fetch_quiz_data_from_api():
     TRIVIA_API_URL = "https://opentdb.com/api.php?amount=1&type=multiple"
@@ -136,39 +172,22 @@ async def send_poll_to_chat(context: ContextTypes.DEFAULT_TYPE, chat_id, quiz_da
         is_anonymous=True, 
         open_period=600 # 10 minutes
     )
-    # 💡 NOTE: We log success in the *new helper function*
-    # logger.info(f"English Quiz sent successfully to chat: {chat_id}.")
 
-
-# 💡 FIX 2.1: New helper function to send AND handle errors
 async def send_quiz_and_handle_errors(context: ContextTypes.DEFAULT_TYPE, chat_id, quiz_data):
-    """
-    Attempts to send a poll to a single chat_id.
-    Handles errors and deactivates chat if necessary.
-    Returns (chat_id, status_string)
-    """
     try:
         await send_poll_to_chat(context, chat_id, quiz_data)
         logger.info(f"Quiz sent successfully to {chat_id}.")
         return (chat_id, "Success")
     
     except (telegram.error.Forbidden, telegram.error.BadRequest) as e:
-        # These errors mean the chat is invalid (bot kicked, user blocked, chat deleted)
         logger.warning(f"Failed to send to {chat_id} (Forbidden/Bad Request): {e}. Deactivating chat.")
-        #
-        # ⚠️ ACTION REQUIRED: You MUST implement this function in leaderboard_manager.py
-        #
         leaderboard_manager.deactivate_chat_in_db(chat_id) 
-        #
         return (chat_id, f"Failed_Deactivated: {e}")
         
     except Exception as e:
-        # Other errors (like timeouts, network issues)
         logger.error(f"Failed to send quiz to {chat_id} (Timeout/Other): {e}")
         return (chat_id, f"Failed_Error: {e}")
 
-
-# 💡 FIX 2.2: Rewritten broadcast function for concurrent (parallel) sending
 async def broadcast_quiz(context: ContextTypes.DEFAULT_TYPE):
     bot_data = context.bot_data
     chat_ids = leaderboard_manager.get_all_active_chat_ids()
@@ -182,13 +201,11 @@ async def broadcast_quiz(context: ContextTypes.DEFAULT_TYPE):
         logger.error("Failed to fetch quiz data globally, cancelling broadcast.")
         return
 
-    # Create a list of tasks to run in parallel
     tasks = [
         send_quiz_and_handle_errors(context, chat_id, quiz_data) 
         for chat_id in chat_ids
     ]
     
-    # Run all tasks concurrently and wait for them all to finish
     logger.info(f"Starting broadcast to {len(tasks)} chats...")
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -232,7 +249,6 @@ async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAU
             
             chat_data[LOCK_KEY] = True 
             try:
-                # This now calls the NEW broadcast function
                 await broadcast_quiz(context) 
             except Exception as e:
                 logger.error(f"Global Quiz failed: {e}")
@@ -244,7 +260,7 @@ async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAU
             chat_data[MESSAGE_COUNTER_KEY] = QUIZ_TRIGGER_COUNT - 1 
             logger.info(f"Global time is only {round(time_diff.total_seconds()/60, 2)} min. Waiting...")
             
-# --- 🚀 MAIN EXECUTION FUNCTION (Corrected) ---
+# --- 🚀 MAIN EXECUTION FUNCTION (Updated) ---
 def main(): 
     if not TOKEN or not WEBHOOK_URL:
         logger.critical("FATAL ERROR: Environment variables missing.")
@@ -256,13 +272,15 @@ def main():
         Application.builder()
         .token(TOKEN)
         .concurrent_updates(True)
-        # 💡 FIX 3: Reduced timeouts to fail faster on dead chats
-        .connect_timeout(10)   # Time to establish connection
-        .read_timeout(15)      # Time to wait for a response
-        .write_timeout(15)     # Time to send data
+        .connect_timeout(10)   
+        .read_timeout(15)      
+        .write_timeout(15)     
         .http_version('1.1')
         .build()
     )
+    
+    # 💡 NEW: Register the error handler
+    application.add_error_handler(error_handler)
     
     # Handlers add karein
     application.add_handler(CommandHandler("start", start_command))
