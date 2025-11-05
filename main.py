@@ -235,7 +235,8 @@ def main():
     # Database setup must run before the bot starts
     leaderboard_manager.setup_database()
 
-    application = Application.builder().token(TOKEN).concurrent_updates(True).read_timeout(120.0).write_timeout(120.0).build()
+    application = Application.builder().token(TOKEN).concurrent_updates(True).read_timeout(120.0).write_timeout(120.0).http_version('1.1')
+    .get_updates_connection_pool_size(3).build()
     
     # Handlers add karein
     application.add_handler(CommandHandler("start", start_command))
