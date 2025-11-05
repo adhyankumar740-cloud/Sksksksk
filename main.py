@@ -175,7 +175,7 @@ async def broadcast_quiz(context: ContextTypes.DEFAULT_TYPE):
         try:
             await send_poll_to_chat(context, chat_id, quiz_data) 
             successful_sends += 1
-            await asyncio.sleep(0.5) 
+            await asyncio.sleep(1.5) 
         except Exception as e:
             logger.error(f"Failed to send quiz to {chat_id}: {e}")
 
@@ -235,7 +235,7 @@ def main():
     # Database setup must run before the bot starts
     leaderboard_manager.setup_database()
 
-    application = Application.builder().token(TOKEN).concurrent_updates(True).build()
+    application = Application.builder().token(TOKEN).concurrent_updates(True).read_timeout(60.0).write_timeout(60.0).build()
     
     # Handlers add karein
     application.add_handler(CommandHandler("start", start_command))
