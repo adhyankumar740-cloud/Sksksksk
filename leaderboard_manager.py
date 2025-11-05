@@ -12,7 +12,7 @@ import telegram.error
 logger = logging.getLogger(__name__)
 
 # Environment Variable for Leaderboard Photo URL (Set this in Render)
-LEADERBOARD_PHOTO_URL_KEY = os.environ.get('TELEGRAM_LEADERBOARD_PHOTO_URL', 'https://via.placeholder.com/600x200?text=Leaderboard+Image+Placeholder')
+LEADERBOARD_PHOTO_URL_KEY = os.environ.get('TELEGRAM_LEADERBOARD_PHOTO_URL', 'https://files.catbox.moe/jxr1w4.jpg')
 
 # --- Database Connection and Setup ---
 
@@ -216,8 +216,8 @@ async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # 3. Inline Buttons Setup
     keyboard = [
-        [InlineKeyboardButton("Aaj (Local)", callback_data=f"lb_daily:{chat_id}"),
-         InlineKeyboardButton("Hafte bhar (Local)", callback_data=f"lb_weekly:{chat_id}"),
+        [InlineKeyboardButton("Today(Local)", callback_data=f"lb_daily:{chat_id}"),
+         InlineKeyboardButton("Week(Local)", callback_data=f"lb_weekly:{chat_id}"),
          InlineKeyboardButton("All Time (Local)", callback_data=f"lb_alltime:{chat_id}")],
         [InlineKeyboardButton("Global (24 Hrs)", callback_data=f"lb_global_daily:{chat_id}"),
          InlineKeyboardButton("Global (All Time)", callback_data=f"lb_global_alltime:{chat_id}")]
