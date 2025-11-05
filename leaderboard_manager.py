@@ -1,3 +1,5 @@
+# leaderboard_manager.py (Corrected)
+
 import os
 import psycopg2
 from datetime import datetime
@@ -14,19 +16,17 @@ from PIL import Image, ImageDraw, ImageFont
 logger = logging.getLogger(__name__)
 
 # --- ⚙️ Image Generation Constants ---
-# ⚠️ Make sure this font file is in the same directory!
 FONT_FILE_BOLD = "Roboto-Bold.ttf" 
-FONT_FILE_REGULAR = "Roboto-Regular.ttf" # (Optional, download this too)
+FONT_FILE_REGULAR = "Roboto-Regular.ttf"
 IMG_WIDTH = 800
-BG_COLOR = (30, 30, 45) # Dark blue background
-TITLE_COLOR = (255, 255, 255) # White
-TEXT_COLOR = (200, 200, 200) # Light grey
-RANK_COLOR = (255, 215, 0) # Gold
+BG_COLOR = (30, 30, 45) 
+TITLE_COLOR = (255, 255, 255)
+TEXT_COLOR = (200, 200, 200)
+RANK_COLOR = (255, 215, 0) 
 # --- End Constants ---
 
 
 # --- Database Connection and Setup (Same) ---
-
 def get_db_connection():
     DB_URL = os.environ.get('DATABASE_URL')
     if not DB_URL:
@@ -63,7 +63,6 @@ def setup_database():
                     );
                 """)
                 
-                # Migration: Add 'chat_type' 
                 try:
                     cur.execute("SELECT chat_type FROM chats LIMIT 1;")
                 except psycopg2.ProgrammingError:
@@ -72,7 +71,6 @@ def setup_database():
                     cur.execute("ALTER TABLE chats ADD COLUMN chat_type VARCHAR(50);")
                     conn.commit()
                 
-                # Migration: Add 'is_active'
                 try:
                     cur.execute("SELECT is_active FROM chats LIMIT 1;")
                 except psycopg2.ProgrammingError:
@@ -91,7 +89,6 @@ def setup_database():
                 conn.close()
 
 # --- Chat Registration (Same) ---
-
 def register_chat(update: Update):
     conn = get_db_connection()
     if not conn: return
@@ -114,7 +111,6 @@ def register_chat(update: Update):
         if conn: conn.close()
 
 # --- Message Count Update (Same) ---
-
 async def update_message_count_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db_connection()
     if not conn: return
@@ -136,22 +132,15 @@ async def update_message_count_db(update: Update, context: ContextTypes.DEFAULT_
         if conn: conn.close()
 
 
-# --- 💡 NEW: Leaderboard Image Generator ---
-
+# --- Leaderboard Image Generator (Corrected) ---
 def generate_leaderboard_image(title: str, leaderboard_data: list, chat_name: str):
-    """
-    Generates a leaderboard image from data and returns it as bytes.
-    leaderboard_data = [(username, count), ...]
-    """
     try:
-        # Load fonts
         font_title = ImageFont.truetype(FONT_FILE_BOLD, 40)
         font_chat = ImageFont.truetype(FONT_FILE_REGULAR, 24)
         font_rank = ImageFont.truetype(FONT_FILE_BOLD, 28)
         font_user = ImageFont.truetype(FONT_FILE_REGULAR, 28)
     except IOError:
         logger.error(f"Error: Font file '{FONT_FILE_BOLD}' or '{FONT_FILE_REGULAR}' not found.")
-        # Create a simple fallback text image
         img = Image.new('RGB', (IMG_WIDTH, 200), color=BG_COLOR)
         d = ImageDraw.Draw(img)
         d.text((10, 10), "Error: Font file not found.\nPlease install fonts.", fill=(255,0,0))
@@ -160,7 +149,6 @@ def generate_leaderboard_image(title: str, leaderboard_data: list, chat_name: st
         img_bytes.seek(0)
         return img_bytes
 
-    # Calculate image height
     item_height = 50
     header_height = 150
     footer_height = 50
@@ -170,12 +158,10 @@ def generate_leaderboard_image(title: str, leaderboard_data: list, chat_name: st
     d = ImageDraw.Draw(img)
 
     # --- Draw Header ---
-    # Title
     title_bbox = d.textbbox((0, 0), title, font=font_title)
     title_w = title_bbox[2] - title_bbox[0]
     d.text(((IMG_WIDTH - title_w) / 2, 40), title, font=font_title, fill=TITLE_COLOR)
     
-    # Chat Name
     chat_name_text = f"Group: {chat_name[:35]}" + ('...' if len(chat_name) > 35 else '')
     chat_bbox = d.textbbox((0, 0), chat_name_text, font=font_chat)
     chat_w = chat_bbox[2] - chat_bbox[0]
@@ -198,28 +184,25 @@ def generate_leaderboard_image(title: str, leaderboard_data: list, chat_name: st
             d.text((50, y_pos), rank, font=font_rank, fill=RANK_COLOR)
             # Username
             d.text((120, y_pos), username_display, font=font_user, fill=TEXT_COLOR)
+            
             # Count
             count_bbox = d.textbbox((0, 0), count_str, font=font_user)
             count_w = count_bbox[2] - count_bbox[0]
-            d.text((IMG_WIDTH - count_w - 50), y_pos, count_str, font=font_user, fill=TEXT_COLOR)
+            
+            # 💡💡💡 FIX: YAHAN PAR ERROR THA 💡💡💡
+            # `(x, y)` ko ek tuple `((x), y)` hona chahiye
+            d.text( ((IMG_WIDTH - count_w - 50), y_pos), count_str, font=font_user, fill=TEXT_COLOR)
             
             y_pos += item_height
 
-    # --- Save image to bytes ---
     img_bytes = io.BytesIO()
     img.save(img_bytes, format='PNG')
     img_bytes.seek(0)
     return img_bytes
 
 
-# --- 💡 REWRITTEN: Leaderboard Core Logic ---
-
+# --- Leaderboard Core Logic (Same) ---
 async def get_leaderboard_data(chat_id: int, scope: str):
-    """
-    Fetches leaderboard data AND group name from the DB.
-    Returns: (title_string, chat_name_string, data_list)
-    data_list = [(username, count), ...]
-    """
     conn = get_db_connection()
     if not conn: 
         return ("Database Error", "Unknown", [])
@@ -242,10 +225,10 @@ async def get_leaderboard_data(chat_id: int, scope: str):
     elif scope == 'global_daily':
         time_filter = "message_time >= NOW() - INTERVAL '1 day'"
         title = "🌍 Global Leaderboard (24 Hrs)"
-        chat_filter = "" # No chat filter for global
+        chat_filter = "" 
     elif scope == 'global_alltime':
         title = "🌍 Global Leaderboard (All Time)"
-        chat_filter = "" # No chat filter for global
+        chat_filter = "" 
     
     filters = []
     if chat_filter: filters.append(chat_filter)
@@ -266,10 +249,10 @@ async def get_leaderboard_data(chat_id: int, scope: str):
     try:
         with conn.cursor() as cur:
             cur.execute(query)
-            results = cur.fetchall() # This will be [(username, count), ...]
+            results = cur.fetchall() 
             
             chat_name = "Global"
-            if "Local" in title: # Only fetch chat name for local boards
+            if "Local" in title:
                 cur.execute(chat_name_query, (chat_id,))
                 chat_name_result = cur.fetchone()
                 if chat_name_result:
@@ -286,9 +269,6 @@ async def get_leaderboard_data(chat_id: int, scope: str):
         if conn: conn.close()
 
 def format_leaderboard_text(title: str, chat_name: str, data: list):
-    """
-    Generates the text-only caption as a fallback.
-    """
     if not data:
         return f"*{title}*\n_{chat_name}_\n\nKoi data nahi mila."
         
@@ -298,32 +278,25 @@ def format_leaderboard_text(title: str, chat_name: str, data: list):
         
     return leaderboard_text
 
-# --- 💡 REWRITTEN: Leaderboard Command ---
-
+# --- Leaderboard Command (Same) ---
 async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     
-    # Send a "Loading..." message first
     try:
         sent_message = await update.message.reply_text("🏆 Leaderboard ban raha hai, कृपया प्रतीक्षा करें...")
     except Exception as e:
         logger.error(f"Failed to send loading message: {e}")
         return
 
-    # 1. Fetch data
     title, chat_name, data = await get_leaderboard_data(chat_id, 'daily')
     
-    # 2. Generate Image
     if title == "Database Error":
         await sent_message.edit_text("Database se connect nahi ho pa raha hai.")
         return
         
     image_bytes = generate_leaderboard_image(title, data, chat_name)
-    
-    # 3. Format Text Caption (for fallback and a11y)
     caption_text = format_leaderboard_text(title, chat_name, data)
 
-    # 4. Create Keyboard
     keyboard = [
         [InlineKeyboardButton("Aaj (Local)", callback_data=f"lb_daily:{chat_id}"),
          InlineKeyboardButton("Hafte bhar (Local)", callback_data=f"lb_weekly:{chat_id}"),
@@ -333,7 +306,6 @@ async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # 5. Delete "Loading..." message and send photo
     try:
         await sent_message.delete()
         await context.bot.send_photo(
@@ -345,7 +317,6 @@ async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
     except Exception as e:
         logger.error(f"Failed to send leaderboard photo: {e}. Sending text fallback.")
-        # If photo fails, send text
         await context.bot.send_message(
             chat_id=chat_id,
             text=caption_text,
@@ -353,18 +324,15 @@ async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             parse_mode=constants.ParseMode.MARKDOWN
         )
 
-# --- 💡 REWRITTEN: Leaderboard Callback ---
-
+# --- Leaderboard Callback (Same) ---
 async def leaderboard_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer("Updating...")
     
     try:
-        # Check data format: lb_scope:chat_id
         parts = query.data.split('_', 1)[1].split(':')
         scope = parts[0]
-        # Handle different scopes (daily, weekly, global_daily, etc.)
-        if len(parts) > 2: # e.g., global_daily:chat_id
+        if len(parts) > 2:
             scope = f"{parts[0]}_{parts[1]}"
             chat_id_str = parts[2]
         else:
@@ -375,20 +343,15 @@ async def leaderboard_callback(update: Update, context: CallbackContext):
         logger.error(f"Invalid callback data: {query.data} | Error: {e}")
         return
 
-    # 1. Fetch new data
     title, chat_name, data = await get_leaderboard_data(chat_id, scope)
     
-    # 2. Generate new Image
     if title == "Database Error":
         await query.edit_message_caption(caption="Database se connect nahi ho pa raha hai.")
         return
         
-    image_bytes = generate_leaderboard_image(title, data, chat_name)
-    
-    # 3. Format new Text Caption
+    image_bytes = generate_leadeboard_image(title, data, chat_name) # 💡 Yahan bhi call hota hai
     caption_text = format_leaderboard_text(title, chat_name, data)
 
-    # 4. Create Keyboard (same as before)
     keyboard = [
         [InlineKeyboardButton("Aaj (Local)", callback_data=f"lb_daily:{chat_id}"),
          InlineKeyboardButton("Hafte bhar (Local)", callback_data=f"lb_weekly:{chat_id}"),
@@ -398,7 +361,6 @@ async def leaderboard_callback(update: Update, context: CallbackContext):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # 5. Edit the message media (replace the photo)
     try:
         await query.edit_message_media(
             media=InputMediaPhoto(media=image_bytes, caption=caption_text, parse_mode=constants.ParseMode.MARKDOWN),
@@ -413,7 +375,6 @@ async def leaderboard_callback(update: Update, context: CallbackContext):
 
 
 # --- Profile Command (Same) ---
-
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db_connection()
     if not conn: return await update.message.reply_text("*Database is offline.* Profile unavailable.")
@@ -454,7 +415,6 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if conn: conn.close()
 
 # --- Broadcast Feature (Same, Async) ---
-
 async def send_broadcast_and_handle_errors(context: ContextTypes.DEFAULT_TYPE, chat_id, from_chat_id, message_id):
     try:
         await context.bot.copy_message(
@@ -476,7 +436,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("यह कमांड केवल बॉट के DM में इस्तेमाल किया जा सकता है।")
         return
     if not update.message.reply_to_message:
-        await update.message.reply_text("कृपया उस मैसेज का जवाब (Reply) दें जिसे आप ब्रॉडकाסט करना चाहते हैं।")
+        await update.message.reply_text("कृपया उस मैसेज का जवाब (Reply) दें जिसे आप ब्रॉडकास्ट करना चाहते हैं।")
         return
 
     broadcast_message = update.message.reply_to_message
@@ -510,7 +470,6 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ ब्रॉडकास्ट पूरा हुआ! {success_count} / {len(tasks)} चैट्स को सफलतापूर्वक भेजा गया।")
 
 # --- Utility Functions (Same) ---
-
 def get_all_active_chat_ids():
     conn = get_db_connection()
     if not conn: return set()
