@@ -150,7 +150,7 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• User profiles \\(/profile\\)\n"
         f"• Image search \\(/img\\)\n"
         f"• AI Image generation \\(/gen\\)\n\n"
-        f"•Owner:Gopu\n"
+        f"•Owner: Gopu\n"
     )
     
     if OWNER_ID:
