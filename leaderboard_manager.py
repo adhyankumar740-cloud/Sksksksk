@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # --- ⚙️ Owner and Image Constants ---
 FONT_FILE_BOLD = "Roboto-Bold.ttf"
 FONT_FILE_REGULAR = "Roboto-Regular.ttf"
-BACKGROUND_IMAGE_PATH = "leaderboard_bg.png"
+BACKGROUND_IMAGE_PATH = "25552 (1).jpg"
 IMG_WIDTH = 800
 TITLE_COLOR = (255, 255, 255)
 TEXT_COLOR = (200, 200, 200)
