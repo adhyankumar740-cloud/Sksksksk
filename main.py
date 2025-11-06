@@ -26,9 +26,10 @@ LAST_GLOBAL_QUIZ_KEY = 'last_global_quiz_time'
 GLOBAL_INTERVAL_MIN = 10 
 
 WELCOME_VIDEO_URLS = [
-    # "YOUR_TELEGRAM_VIDEO_FILE_ID_1", 
-    # "YOUR_TELEGRAM_VIDEO_FILE_ID_2", 
-    # "YOUR_TELEGRAM_VIDEO_FILE_ID_3"
+    "https://files.catbox.moe/4mjz8l.mp4", 
+    "https://files.catbox.moe/hxkkvt.mp4", 
+    "https://files.catbox.moe/li9zgh.mp4", 
+    "https://files.catbox.moe/vq58fh.mp4",
 ]
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
