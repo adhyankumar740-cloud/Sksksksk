@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # --- ⚙️ Image Generation Constants (MODIFIED) ---
 FONT_FILE_BOLD = "Roboto-Bold.ttf"
 FONT_FILE_REGULAR = "Roboto-Regular.ttf"
-BACKGROUND_IMAGE_PATH = ""
+BACKGROUND_IMAGE_PATH = "25552 (1).jpg"
 IMG_WIDTH = 1000 # <-- MODIFIED (was 800)
 TITLE_COLOR = (255, 255, 255)
 TEXT_COLOR = (200, 200, 200)
