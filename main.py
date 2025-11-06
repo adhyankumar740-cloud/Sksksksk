@@ -187,9 +187,6 @@ async def img_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         photo = random.choice(data['photos'])
         photo_url = photo['src']['large']
         photographer = photo['photographer']
-        photographer_url = photo['photographer_url']
-        
-        caption = f"Photo by [{escape_markdown(photographer, version=2)}]({photographer_url}) on Pexels"
 
         await update.message.reply_photo(
             photo_url,
