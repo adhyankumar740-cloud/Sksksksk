@@ -188,6 +188,8 @@ async def img_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         photo_url = photo['src']['large']
         photographer = photo['photographer']
 
+        caption="Your Image"
+
         await update.message.reply_photo(
             photo_url,
             caption=caption,
