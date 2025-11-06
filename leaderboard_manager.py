@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 FONT_FILE_BOLD = "Roboto-Bold.ttf"
 FONT_FILE_REGULAR = "Roboto-Regular.ttf"
 BACKGROUND_IMAGE_PATH = "25552 (1).jpg"
-IMG_WIDTH = 1000 # <-- MODIFIED (was 800)
+IMG_WIDTH = 1200 # <-- MODIFIED (was 800)
 TITLE_COLOR = (255, 255, 255)
 TEXT_COLOR = (200, 200, 200)
 RANK_COLOR = (255, 215, 0)
@@ -259,14 +259,14 @@ async def get_leaderboard_data(chat_id: int, scope: str):
 
     if scope == 'daily':
         time_filter = "message_time >= NOW() - INTERVAL '1 day'"
-        title = "Today's Leaderboard (Local)"
+        title = "Today's Leaderboard "
         chat_filter = f"chat_id = {chat_id}"
     elif scope == 'weekly':
         time_filter = "message_time >= NOW() - INTERVAL '7 days'"
-        title = "Weekly Leaderboard (Local)"
+        title = "Weekly Leaderboard "
         chat_filter = f"chat_id = {chat_id}"
     elif scope == 'alltime':
-        title = "All-Time Leaderboard (Local)"
+        title = "All-Time Leaderboard"
         chat_filter = f"chat_id = {chat_id}"
     else:
         logger.warning(f"Invalid leaderboard scope received: {scope}")
@@ -370,9 +370,9 @@ async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     caption_text = format_leaderboard_text(title, chat_name, data)
 
     keyboard = [
-        [InlineKeyboardButton("Today (Local)", callback_data=f"lb_daily:{chat_id}"),
-         InlineKeyboardButton("Weekly (Local)", callback_data=f"lb_weekly:{chat_id}"),
-         InlineKeyboardButton("All-Time (Local)", callback_data=f"lb_alltime:{chat_id}")],
+        [InlineKeyboardButton("Today", callback_data=f"lb_daily:{chat_id}"),
+         InlineKeyboardButton("Weekly", callback_data=f"lb_weekly:{chat_id}"),
+         InlineKeyboardButton("All-Time", callback_data=f"lb_alltime:{chat_id}")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -421,9 +421,9 @@ async def leaderboard_callback(update: Update, context: CallbackContext):
     caption_text = format_leaderboard_text(title, chat_name, data)
 
     keyboard = [
-        [InlineKeyboardButton("Today (Local)", callback_data=f"lb_daily:{chat_id}"),
-         InlineKeyboardButton("Weekly (Local)", callback_data=f"lb_weekly:{chat_id}"),
-         InlineKeyboardButton("All-Time (Local)", callback_data=f"lb_alltime:{chat_id}")],
+        [InlineKeyboardButton("Today", callback_data=f"lb_daily:{chat_id}"),
+         InlineKeyboardButton("Weekly", callback_data=f"lb_weekly:{chat_id}"),
+         InlineKeyboardButton("All-Time", callback_data=f"lb_alltime:{chat_id}")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
