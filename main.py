@@ -46,8 +46,10 @@ WELCOME_VIDEO_URLS = [
     # STEP 3: Uss ID ko yahan neeche paste karein.
     #         Aap ek se zyada ID bhi daal sakte hain, bot alag-alag use karega.
     
-    "BAACAgIAAxkBAA...[YAHAN APNA VALID FILE ID DAALEIN]...",
-    
+    "BBAACAgUAAxkBAAIBxWkOFRIw0g1B_7xuSA4cyUE3ShSlAAJKGwAC_MFxVIx6wUDn1qKBNgQ",
+    "BAACAgUAAxkBAAIByGkOFV746X7wbcPRCZTVy4iqtaC7AAKmIQACGV5QVJYHM5LZKdVANgQ",
+    "BAACAgUAAyEFAATDIfMWAAICe2kNq_8rhMxyunaubyvrjovOEAz_AAIEJQACnClpVEIdwOhLrWhYNgQ",
+    "BAACAgUAAyEFAATDIfMWAAIB3mkNk-cqNbscJhwvxWOBcK7PXkUcAAILJQACnClpVFEZkkwlNiBCNgQ",
     # --- FALLBACK (Agar File ID nahi hai) ---
     # Agar aapko URL hi use karna hai, toh yeh code usse download karke
     # re-upload karega (jo slow hai aur fail ho sakta hai).
