@@ -34,10 +34,10 @@ MESSAGE_COUNTER_KEY = 'message_count' # (Ab use nahi ho raha)
 WELCOME_VIDEO_URLS = [
     # 💡 IMPORTANT: Yahan apne video File_IDs daalein, URL nahi
     # Example: "BAACAgIAAxkBAAIFjWZYg-gqPRg1ZgABG3xK6n_Wri-vJgACyAADOg-pSjT1XYFeqvA0HgQ"
-    "AgADTxsAAvzBcVQ", 
-    "AgADShsAAvzBcVQ", 
-    "AgADBCUAApwpaVQ", 
-    "AgADCyUAApwpaVQ",
+    "https://files.catbox.moe/4mjz8l.mp4", 
+    "https://files.catbox.moe/hxkkvt.mp4", 
+    "https://files.catbox.moe/li9zgh.mp4", 
+    "https://files.catbox.moe/vq58fh.mp4",
 ]
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -123,20 +123,34 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---
 # --- 💡 MODIFIED: Welcome message now uses HTML to prevent crashes
-# ---
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 1. Safety Check: If for some reason the list is empty, exit.
+    if not update.message.new_chat_members:
+        return
+        
     leaderboard_manager.register_chat(update) 
     
+    chat_id = update.effective_chat.id
+    chat_name = update.effective_chat.title
+    
+    # Use html.escape for chat name for safety
+    chat_name_escaped = html.escape(chat_name) if chat_name else "this chat"
+    
+    # Determine the video/URL to use
+    video_url = None
+    if WELCOME_VIDEO_URLS:
+        video_index = context.bot_data.get('video_counter', 0)
+        video_url = WELCOME_VIDEO_URLS[video_index % len(WELCOME_VIDEO_URLS)]
+        context.bot_data['video_counter'] = video_index + 1
+    
+    
+    # Process each new member
     for member in update.message.new_chat_members:
         if member.is_bot:
             continue
-        chat_id = update.effective_chat.id
-        chat_name = update.effective_chat.title
-        user_mention = member.mention_html() # This is already HTML
+            
+        user_mention = member.mention_html() # Already HTML escaped
         user_id = member.id
-        
-        # Use html.escape for chat name, NOT escape_markdown
-        chat_name_escaped = html.escape(chat_name) if chat_name else "this chat"
         
         # Switched to HTML tags (<b> for bold, <code> for code)
         welcome_message = (
@@ -146,29 +160,30 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"Chat and earn your spot on the leaderboard! 🏆"
         )
         
-        if not WELCOME_VIDEO_URLS:
-            video_url = None
-        else:
-            video_index = context.bot_data.get('video_counter', 0)
-            video_url = WELCOME_VIDEO_URLS[video_index % len(WELCOME_VIDEO_URLS)]
-            context.bot_data['video_counter'] = video_index + 1
-        
         try:
             if video_url:
                 await context.bot.send_video(
                     chat_id=chat_id, 
-                    video=video_url, # <-- Agar yeh fail ho, toh File ID use karein
+                    video=video_url, # <-- Can be File ID or public URL
                     caption=welcome_message,
-                    parse_mode=constants.ParseMode.HTML # <-- MODIFIED TO HTML
+                    parse_mode=constants.ParseMode.HTML
                 )
             else:
-                 raise Exception("No video URL found.")
+                 # Agar WELCOME_VIDEO_URLS list empty hai toh yahan direct message bhej do
+                 await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=welcome_message,
+                    parse_mode=constants.ParseMode.HTML
+                 )
         except Exception as e:
-            logger.error(f"Failed to send welcome video to {chat_id}: {e}")
+            # Enhanced logging to see what was sent when it failed
+            logger.error(f"Failed to send welcome video to {chat_id} (URL/ID: {video_url}): {e}")
+            
+            # Agar video fail ho jaaye, toh sirf text message bhej do (jo pehle se ho raha hai)
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=welcome_message,
-                parse_mode=constants.ParseMode.HTML # <-- MODIFIED TO HTML
+                parse_mode=constants.ParseMode.HTML 
             )
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
