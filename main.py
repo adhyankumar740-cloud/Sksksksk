@@ -48,7 +48,7 @@ ABOUT_PHOTO_ID = os.environ.get('ABOUT_PHOTO_ID') # Get this from @RawDataBot
 
 # --- 💡 NEW SPAM CONSTANTS ---
 SPAM_MESSAGE_LIMIT = 5 # 5 मैसेज
-SPAM_TIME_WINDOW = 2 # 2 सेकंड के अंदर
+SPAM_TIME_WINDOW = 4 # 2 सेकंड के अंदर
 SPAM_BLOCK_DURATION = 1200 # 1200 सेकंड = 20 मिनट
 
 
