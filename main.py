@@ -30,6 +30,18 @@ LAST_GLOBAL_QUIZ_KEY = 'last_global_quiz_time'
 # Yeh constants ab use nahi honge, lekin rakhe hain
 QUIZ_TRIGGER_COUNT = 5 # (Ab use nahi ho raha)
 MESSAGE_COUNTER_KEY = 'message_count' # (Ab use nahi ho raha)
+# main.py (Constants section mein, jahan LOCK_KEY hai)
+
+# ...
+LOCK_KEY = 'global_quiz_lock' 
+LAST_GLOBAL_QUIZ_KEY = 'last_global_quiz_time'
+
+# --- 💡 NEW CONSTANT ---
+# Purane quiz message IDs ko store karne ke liye
+LAST_QUIZ_MESSAGE_KEY = 'last_quiz_message_ids' 
+# ------------------------
+
+# ...
 
 
 # --- 💡 VIDEO SOLUTION YAHAN HAI ---
@@ -423,7 +435,90 @@ async def send_quiz_and_handle_errors(context: ContextTypes.DEFAULT_TYPE, chat_i
         return (chat_id, f"Failed_Error: {e}")
 
 # Yeh function ab message handler dwara call kiya jayega
+# broadcast_quiz function ko isse replace karein
+
 async def broadcast_quiz(context: ContextTypes.DEFAULT_TYPE):
+    bot_data = context.bot_data
+    chat_ids = leaderboard_manager.get_all_active_chat_ids()
+    
+    if not chat_ids:
+        logger.warning("No active chats registered for broadcast.")
+        return
+        
+    quiz_data = await fetch_quiz_data_from_api()
+    if not quiz_data:
+        logger.error("Failed to fetch quiz data globally, cancelling broadcast.")
+        return
+        
+    # --- 💡 STEP 1: PURANE QUIZZES KO DELETE KAREIN ---
+    old_quiz_messages = bot_data.pop(LAST_QUIZ_MESSAGE_KEY, {}) # Dictionary se IDs nikaal lo
+    new_quiz_messages = {} # Naye IDs store karne ke liye
+    
+    delete_tasks = []
+    for chat_id_str, message_id in old_quiz_messages.items():
+        chat_id = int(chat_id_str)
+        # Delete task banao
+        delete_tasks.append(
+            context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        )
+        
+    # Asynchronously sabhi purane messages ko delete karo
+    if delete_tasks:
+        logger.info(f"Attempting to delete {len(delete_tasks)} old quiz messages.")
+        # Errors ko ignore karne ke liye gather use kar rahe hain (agar message pehle hi delete ho gaya ho)
+        await asyncio.gather(*delete_tasks, return_exceptions=True) 
+    # ----------------------------------------------------
+    
+    # --- 💡 STEP 2: NAYA QUIZ BHEJEIN AUR ID STORE KAREIN ---
+    
+    # Naye quiz bhejkar uska message object wapas lene ke liye naya function bana rahe hain
+    tasks = [
+        send_quiz_and_track_id(context, chat_id, quiz_data) 
+        for chat_id in chat_ids
+    ]
+    
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    successful_sends = 0
+    
+    for res in results:
+        if isinstance(res, tuple) and res[1] == "Success":
+            successful_sends += 1
+            chat_id, message_id = res[0], res[2] # Naya message_id nikal rahe hain
+            new_quiz_messages[str(chat_id)] = message_id # Naye ID ko store kar rahe hain
+        elif isinstance(res, Exception):
+            logger.error(f"An unexpected error occurred during gather: {res}")
+            
+    # Naye message IDs ko bot_data mein save karo
+    bot_data[LAST_QUIZ_MESSAGE_KEY] = new_quiz_messages
+    
+    # VERY IMPORTANT: Yahan global timer reset ho raha hai
+    bot_data[LAST_GLOBAL_QUIZ_KEY] = datetime.now().timestamp()
+    logger.info(f"Broadcast attempt finished. Successful to {successful_sends} / {len(tasks)} chats. Global timer reset. {len(new_quiz_messages)} new quiz IDs stored.")
+
+# Humare purane function ko thoda badal kar usse naye message ID wapas lenge
+async def send_quiz_and_track_id(context: ContextTypes.DEFAULT_TYPE, chat_id, quiz_data):
+    try:
+        sent_message = await context.bot.send_poll( # Sent message object wapas le rahe hain
+            chat_id=chat_id,
+            question=quiz_data['question'],
+            options=quiz_data['options'],
+            type=constants.PollType.QUIZ,
+            correct_option_id=quiz_data['correct_option_id'],
+            explanation=quiz_data['explanation'],
+            is_anonymous=True,
+            open_period=600 
+        )
+        logger.info(f"Quiz sent successfully to {chat_id}.")
+        # Naya: Ab hum chat_id, "Success", aur message_id return kar rahe hain
+        return (chat_id, "Success", sent_message.message_id) 
+    except (telegram.error.Forbidden, telegram.error.BadRequest) as e:
+        logger.warning(f"Failed to send to {chat_id} (Forbidden/Bad Request): {e}. Deactivating chat.")
+        return (chat_id, f"Failed_Deactivated: {e}", None)
+    except Exception as e:
+        logger.error(f"Failed to send quiz to {chat_id} (Timeout/Other): {e}")
+        return (chat_id, f"Failed_Error: {e}", None)
+#
+'''async def broadcast_quiz(context: ContextTypes.DEFAULT_TYPE):
     bot_data = context.bot_data
     chat_ids = leaderboard_manager.get_all_active_chat_ids()
     if not chat_ids:
@@ -451,7 +546,7 @@ async def broadcast_quiz(context: ContextTypes.DEFAULT_TYPE):
     # VERY IMPORTANT: Yahan global timer reset ho raha hai
     bot_data[LAST_GLOBAL_QUIZ_KEY] = datetime.now().timestamp()
     logger.info(f"Broadcast attempt finished. Successful to {successful_sends} / {len(tasks)} chats. Global timer reset.")
-
+'''
 
 # --- 🎯 CORE MESSAGE COUNTER LOGIC (POORI TARAH BADAL GAYA) ---
 async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
