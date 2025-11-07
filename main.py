@@ -162,9 +162,9 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         try:
             if video_url:
-                await context.bot.send_document(
+                await context.bot.send_video(
                     chat_id=chat_id, 
-                    document=video_url, # <-- Can be File ID or public URL
+                    video=video_url, # <-- Can be File ID or public URL
                     caption=welcome_message,
                     parse_mode=constants.ParseMode.HTML
                 )
