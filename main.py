@@ -1,17 +1,14 @@
-# main.py (FINAL FIX using Database for Quiz Counter)
+# main.py (Updated with HTML Welcome Message and FINAL Quiz Fix)
 
 import telegram
 from telegram import Update, constants
-from telegram.ext import (
-    Application, CommandHandler, ContextTypes, MessageHandler, 
-    filters, CallbackQueryHandler, PicklePersistence
-)
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 from telegram.helpers import escape_markdown
 import requests
 import random
 import os
 import asyncio
-import html
+import html # <-- Imported for HTML escaping
 from datetime import datetime
 import logging 
 import traceback
@@ -23,10 +20,14 @@ import leaderboard_manager
 
 # --- ⚙️ Constants and Setup ---
 QUIZ_TRIGGER_COUNT = 5
-# MESSAGE_COUNTER_KEY = 'message_count' # <-- AB YEH DB MEIN HAI
-LOCK_KEY = 'quiz_in_progress' # <-- Yeh abhi bhi memory mein rahega (taaki ek time pe ek hi quiz aaye)
+MESSAGE_COUNTER_KEY = 'message_count'
+LOCK_KEY = 'quiz_in_progress' 
+LAST_GLOBAL_QUIZ_KEY = 'last_global_quiz_time'
+GLOBAL_INTERVAL_MIN = 10 # <-- Note: Yeh abhi use nahi ho raha naye quiz logic mein
 
 WELCOME_VIDEO_URLS = [
+    # 💡 IMPORTANT: Yahan apne video File_IDs daalein, URL nahi
+    # Example: "BAACAgIAAxkBAAIFjWZYg-gqPRg1ZgABG3xK6n_Wri-vJgACyAADOg-pSjT1XYFeqvA0HgQ"
     "https://files.catbox.moe/4mjz8l.mp4", 
     "https://files.catbox.moe/hxkkvt.mp4", 
     "https://files.catbox.moe/li9zgh.mp4", 
@@ -42,13 +43,15 @@ OWNER_ID = os.environ.get('OWNER_ID')
 PEXELS_API_KEY = os.environ.get('PEXELS_API_KEY')
 STABLE_HORDE_API_KEY = os.environ.get('STABLE_HORDE_API_KEY', '0000000000')
 
+# --- 💡 NEW: Photo IDs for Start/About ---
 START_PHOTO_ID = os.environ.get('START_PHOTO_ID') 
 ABOUT_PHOTO_ID = os.environ.get('ABOUT_PHOTO_ID') 
 
-# --- SPAM CONSTANTS (Unchanged) ---
-SPAM_MESSAGE_LIMIT = 10
-SPAM_TIME_WINDOW = 4 
-SPAM_BLOCK_DURATION = 1200 
+
+# --- 💡 SPAM CONSTANTS (MODIFIED FOR TESTING) ---
+SPAM_MESSAGE_LIMIT = 15 # 15 मैसेज (Pehle 10 tha)
+SPAM_TIME_WINDOW = 1000  # 5 सेकंड के अंदर (Pehle 4 tha)
+SPAM_BLOCK_DURATION = 1200 # 1200 सेकंड = 20 मिनट
 
 
 # --- Error Handler (Unchanged) ---
@@ -76,7 +79,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
             logger.error(f"Failed to send error message to chat: {e}")
 
 
-# --- COMMANDS (Unchanged) ---
+# --- 🎯 COMMANDS (Unchanged) ---
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     leaderboard_manager.setup_database() 
@@ -112,7 +115,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(start_text, parse_mode=constants.ParseMode.MARKDOWN_V2)
 
-
+# ---
+# --- 💡 MODIFIED: Welcome message now uses HTML to prevent crashes
+# ---
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     leaderboard_manager.register_chat(update) 
     
@@ -121,11 +126,13 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             continue
         chat_id = update.effective_chat.id
         chat_name = update.effective_chat.title
-        user_mention = member.mention_html() 
+        user_mention = member.mention_html() # This is already HTML
         user_id = member.id
         
+        # Use html.escape for chat name, NOT escape_markdown
         chat_name_escaped = html.escape(chat_name) if chat_name else "this chat"
         
+        # Switched to HTML tags (<b> for bold, <code> for code)
         welcome_message = (
             f"👋 <b>Welcome to {chat_name_escaped}</b>!\n\n"
             f"User: {user_mention}\n"
@@ -144,9 +151,9 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if video_url:
                 await context.bot.send_video(
                     chat_id=chat_id, 
-                    video=video_url, 
+                    video=video_url, # <-- Agar yeh fail ho, toh File ID use karein
                     caption=welcome_message,
-                    parse_mode=constants.ParseMode.HTML 
+                    parse_mode=constants.ParseMode.HTML # <-- MODIFIED TO HTML
                 )
             else:
                  raise Exception("No video URL found.")
@@ -155,7 +162,7 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=welcome_message,
-                parse_mode=constants.ParseMode.HTML
+                parse_mode=constants.ParseMode.HTML # <-- MODIFIED TO HTML
             )
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -278,7 +285,7 @@ async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await sent_msg.edit_text(f"Sorry, an error occurred during image generation: {e}")
 
 
-# --- QUIZ LOGIC (Unchanged functions) ---
+# --- 📣 QUIZ LOGIC (Unchanged functions) ---
 async def fetch_quiz_data_from_api():
     TRIVIA_API_URL = "https://opentdb.com/api.php?amount=1&type=multiple"
     try:
@@ -317,10 +324,46 @@ async def send_poll_to_chat(context: ContextTypes.DEFAULT_TYPE, chat_id, quiz_da
         open_period=600
     )
 
-# ... (Broadcast functions, etc., if any, were in leaderboard_manager) ...
+async def send_quiz_and_handle_errors(context: ContextTypes.DEFAULT_TYPE, chat_id, quiz_data):
+    try:
+        await send_poll_to_chat(context, chat_id, quiz_data)
+        logger.info(f"Quiz sent successfully to {chat_id}.")
+        return (chat_id, "Success")
+    except (telegram.error.Forbidden, telegram.error.BadRequest) as e:
+        logger.warning(f"Failed to send to {chat_id} (Forbidden/Bad Request): {e}. Deactivating chat.")
+        leaderboard_manager.deactivate_chat_in_db(chat_id) 
+        return (chat_id, f"Failed_Deactivated: {e}")
+    except Exception as e:
+        logger.error(f"Failed to send quiz to {chat_id} (Timeout/Other): {e}")
+        return (chat_id, f"Failed_Error: {e}")
+
+async def broadcast_quiz(context: ContextTypes.DEFAULT_TYPE):
+    bot_data = context.bot_data
+    chat_ids = leaderboard_manager.get_all_active_chat_ids()
+    if not chat_ids:
+        logger.warning("No active chats registered for broadcast.")
+        return
+    quiz_data = await fetch_quiz_data_from_api()
+    if not quiz_data:
+        logger.error("Failed to fetch quiz data globally, cancelling broadcast.")
+        return
+    tasks = [
+        send_quiz_and_handle_errors(context, chat_id, quiz_data) 
+        for chat_id in chat_ids
+    ]
+    logger.info(f"Starting broadcast to {len(tasks)} chats...")
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    successful_sends = 0
+    for res in results:
+        if isinstance(res, tuple) and res[1] == "Success":
+            successful_sends += 1
+        elif isinstance(res, Exception):
+            logger.error(f"An unexpected error occurred during gather: {res}")
+    bot_data[LAST_GLOBAL_QUIZ_KEY] = datetime.now().timestamp()
+    logger.info(f"Broadcast attempt finished. Successful to {successful_sends} / {len(tasks)} chats. Global timer reset.")
 
 
-# --- 🎯 CORE MESSAGE COUNTER LOGIC (💡 FINAL DB FIX) ---
+# --- 🎯 CORE MESSAGE COUNTER LOGIC (FINAL FIX) ---
 async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     chat_id = update.effective_chat.id
@@ -362,38 +405,27 @@ async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAU
         else:
             user_data['msg_timestamps'] = recent_timestamps
 
-    # --- 2. IF NOT BLOCKED: Update DB and Check for Quiz (NEW DB LOGIC) ---
+    # --- 2. IF NOT BLOCKED: Update DB and Check for Quiz (MOVED LOGIC) ---
     if not is_blocked:
         
-        # 2a. Save Message to Leaderboard (for ranking)
-        # This also registers the chat in the 'chats' table if it's new
+        # 2a. Save Message to Leaderboard
         await leaderboard_manager.update_message_count_db(update, context)
 
-        # 2b. Quiz Trigger Logic (using Database)
+        # 2b. Quiz Trigger Logic (Now inside 'if not is_blocked')
         
-        # Check if a quiz is already being sent in this chat (in-memory lock)
+        # Check if a quiz is already being sent in this chat
         if chat_data.get(LOCK_KEY, False):
             return
 
-        # Increment count in DB and get new count
-        # We run the synchronous DB code in a separate thread to not block asyncio
-        new_count = await asyncio.to_thread(
-            leaderboard_manager.increment_and_get_quiz_count,
-            chat_id
-        )
-        
-        # logger.info(f"Chat {chat_id} count is now {new_count}") # <-- DEBUGGING
+        count = chat_data.get(MESSAGE_COUNTER_KEY, 0)
+        chat_data[MESSAGE_COUNTER_KEY] = count + 1 # This now only counts non-spam messages
 
         # Check if count reaches the trigger
-        if new_count >= QUIZ_TRIGGER_COUNT:
-            logger.info(f"Trigger count ({QUIZ_TRIGGER_COUNT}) reached in chat {chat_id}. Resetting DB and sending quiz.")
+        if chat_data[MESSAGE_COUNTER_KEY] >= QUIZ_TRIGGER_COUNT:
+            logger.info(f"Trigger count ({QUIZ_TRIGGER_COUNT}) reached in chat {chat_id}. Sending quiz.")
             
-            # Lock this chat (in-memory) to prevent sending multiple quizzes
+            # Lock this chat to prevent sending multiple quizzes
             chat_data[LOCK_KEY] = True
-            
-            # --- 💡 IMPORTANT: Reset DB counter IMMEDIATELY ---
-            # We reset first, so if the API fails, we still start from 0.
-            await asyncio.to_thread(leaderboard_manager.reset_quiz_count, chat_id)
             
             try:
                 # 1. Fetch a new quiz
@@ -404,10 +436,12 @@ async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAU
                     await send_poll_to_chat(context, chat_id, quiz_data)
                     logger.info(f"Quiz sent successfully to {chat_id}.")
                 else:
+                    # 💡 NEW: Tell user if API fails
                     logger.error(f"Failed to fetch quiz data for chat {chat_id}.")
                     await context.bot.send_message(chat_id, "🧠 Quiz time! ...but I couldn't fetch a question from the API. Please try again later.")
                     
             except (telegram.error.Forbidden, telegram.error.BadRequest) as e:
+                # Handle if bot is kicked or has no permission
                 logger.warning(f"Failed to send quiz to {chat_id} (Forbidden/Bad Request): {e}. Deactivating chat.")
                 leaderboard_manager.deactivate_chat_in_db(chat_id) 
             except Exception as e:
@@ -415,15 +449,14 @@ async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAU
                 await context.bot.send_message(chat_id, "An error occurred while trying to send the quiz.")
             
             finally:
-                # 3. Release the in-memory lock
+                # 3. Reset the counter and unlock the chat
+                chat_data[MESSAGE_COUNTER_KEY] = 0
                 chat_data[LOCK_KEY] = False
-        
-        # If new_count < QUIZ_TRIGGER_COUNT, do nothing.
-        
-    # Else (if user IS blocked), function just ends.
+    
+    # Else (if user IS blocked), function just ends. No message counted, no quiz trigger.
             
             
-# --- 🚀 MAIN EXECUTION FUNCTION (Using Persistence) ---
+# --- 🚀 MAIN EXECUTION FUNCTION (Unchanged) ---
 def main(): 
     if not TOKEN or not WEBHOOK_URL:
         logger.critical("FATAL ERROR: Environment variables missing (TOKEN or WEBHOOK_URL).")
@@ -431,15 +464,9 @@ def main():
         
     leaderboard_manager.setup_database()
 
-    # --- 💡 NEW: Persistence for user_data (spam block) ---
-    # Yeh 'bot_data.pickle' file banayega
-    # Yeh spam timestamps ko save karega, taaki restart ke baad bhi block timer chalta rahe
-    my_persistence = PicklePersistence(filepath='bot_data.pickle')
-
     application = (
         Application.builder()
         .token(TOKEN)
-        .persistence(my_persistence) # <-- Persistence add kiya
         .concurrent_updates(True)
         .connect_timeout(10)   
         .read_timeout(15)      
@@ -451,17 +478,17 @@ def main():
     # Register the error handler
     application.add_error_handler(error_handler)
     
-    # --- Add all handlers (Unchanged) ---
+    # --- Add all handlers ---
     
     # Standard Commands
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("about", about_command))
-    application.add_handler(CommandHandler("broadcast", leaderboard_manager.broadcast_command)) # Broadcast yahan hai
+    application.add_handler(CommandHandler("broadcast", leaderboard_manager.broadcast_command))
 
-    # Leaderboard Commands
+    # Leaderboard Commands (RENAMED)
     application.add_handler(CommandHandler("ranking", leaderboard_manager.ranking_command))
     application.add_handler(CommandHandler("profile", leaderboard_manager.profile_command))
-    application.add_handler(CommandHandler("prof", leaderboard_manager.profile_command))
+    application.add_handler(CommandHandler("prof", leaderboard_formanager.profile_command))
     application.add_handler(CallbackQueryHandler(leaderboard_manager.leaderboard_callback, pattern='^lb_'))
     
     # New Image Commands
@@ -470,12 +497,18 @@ def main():
 
     # Message Handlers
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
+    
+    # ---
+    # --- 💡💡💡 THIS IS THE MAIN FIX 💡💡💡
+    # ---
     application.add_handler(
         MessageHandler(
-            filters.TEXT & ~filters.COMMAND & filters.User(),
+            filters.TEXT & ~filters.COMMAND, # <-- filters.User() YAHAN SE HAT GAYA HAI
             send_quiz_after_n_messages
         )
     )
+    # ---
+    # ---
     
     PORT = int(os.environ.get("PORT", "8000")) 
     
