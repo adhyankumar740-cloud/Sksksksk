@@ -34,10 +34,7 @@ MESSAGE_COUNTER_KEY = 'message_count' # (Ab use nahi ho raha)
 WELCOME_VIDEO_URLS = [
     # 💡 IMPORTANT: Yahan apne video File_IDs daalein, URL nahi
     # Example: "BAACAgIAAxkBAAIFjWZYg-gqPRg1ZgABG3xK6n_Wri-vJgACyAADOg-pSjT1XYFeqvA0HgQ"
-    "https://files.catbox.moe/4mjz8l.mp4", 
-    "https://files.catbox.moe/hxkkvt.mp4", 
-    "https://files.catbox.moe/li9zgh.mp4", 
-    "https://files.catbox.moe/vq58fh.mp4",
+    "https://files.catbox.moe/dg57a8.mp4"
 ]
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
