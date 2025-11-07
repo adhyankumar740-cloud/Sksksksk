@@ -139,6 +139,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---
 # --- 💡 MODIFIED: Welcome message now uses HTML to prevent crashes
+# main.py (Updated Welcome function)
+
+# ... (baaki imports aur setup waisa hi rahega) ...
+
+# WELCOME_VIDEO_URLS = [ ... YAHAN SIRF AAPKA SAHI FILE ID RAKHEIN ... ]
+
+
+# --- 💡 MODIFIED: Welcome message sirf File ID par depend karega ---
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.new_chat_members:
         return
@@ -147,10 +155,11 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
     chat_id = update.effective_chat.id
     chat_name = html.escape(update.effective_chat.title or "this chat")
 
-    video_url = None
+    video_id = None
     if WELCOME_VIDEO_URLS:
         video_index = context.bot_data.get('video_counter', 0)
-        video_url = WELCOME_VIDEO_URLS[video_index % len(WELCOME_VIDEO_URLS)]
+        # Assuming only correct FILE_IDs are in the list
+        video_id = WELCOME_VIDEO_URLS[video_index % len(WELCOME_VIDEO_URLS)]
         context.bot_data['video_counter'] = video_index + 1
 
     for member in update.message.new_chat_members:
@@ -166,45 +175,40 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"Chat and earn your spot on the leaderboard! 🏆"
         )
 
-        if not video_url:
+        if not video_id:
+            # Agar list khaali hai, toh sirf text bhejo
             await context.bot.send_message(chat_id=chat_id, text=welcome_message, parse_mode=constants.ParseMode.HTML)
             return
 
         try:
-            # Try direct send first (Yeh File_ID ke liye BEST hai)
+            # Sirf direct File ID send ki koshish karein (no download fallback)
             await context.bot.send_video(
                 chat_id=chat_id,
-                video=video_url,
+                video=video_id, # Ab yeh 100% File ID hona chahiye
                 caption=welcome_message,
                 parse_mode=constants.ParseMode.HTML,
             )
+        except telegram.error.BadRequest as e:
+            # Agar ID mein 'wrong last symbol' ya 'invalid file ID' ki galti aati hai,
+            # toh hum error message log karenge aur text message bhej denge.
+            logger.error(f"FATAL: File ID ({video_id}) is still invalid. Error: {e}")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"{welcome_message}\n\n⚠️ Video loading failed due to invalid File ID.",
+                parse_mode=constants.ParseMode.HTML
+            )
         except Exception as e:
-            # Agar direct send fail hota hai (jaise ki agar aapne URL use kiya hai)
-            logger.warning(f"Direct video send failed ({video_url}): {e}. Trying manual download...")
+            # Kisi aur error (jaise network) ke liye
+            logger.error(f"Unexpected error during welcome video send: {e}")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=welcome_message,
+                parse_mode=constants.ParseMode.HTML
+            )
 
-            # Fallback: download and reupload
-            try:
-                # 2. CLEANUP: import yahan se hata diya
-                with tempfile.NamedTemporaryFile(suffix=".mp4") as tmp:
-                    r = requests.get(video_url, timeout=15)
-                    r.raise_for_status()
-                    tmp.write(r.content)
-                    tmp.flush()
 
-                    await context.bot.send_video(
-                        chat_id=chat_id,
-                        video=open(tmp.name, "rb"),
-                        caption=welcome_message,
-                        parse_mode=constants.ParseMode.HTML,
-                    )
-            except Exception as e2:
-                # Aakhri fallback: Sirf text bhejo
-                logger.error(f"Manual download+upload failed: {e2}")
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=welcome_message,
-                    parse_mode=constants.ParseMode.HTML
-                )
+# ... (rest of the code remains the same) ...
+                
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot = await context.bot.get_me()
