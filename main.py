@@ -42,8 +42,8 @@ PEXELS_API_KEY = os.environ.get('PEXELS_API_KEY')
 STABLE_HORDE_API_KEY = os.environ.get('STABLE_HORDE_API_KEY', '0000000000')
 
 # --- 💡 NEW: Photo IDs for Start/About ---
-START_PHOTO_ID = os.environ.get('START_PHOTO_ID',AgACAgUAAyEFAASszIqHAAEH9VtpCvMU22FrNIo8Zfq-5Z0F8oZSYwACvAtrG__jWFS0QpaQKfeMWAEAAwIAA3kAAzYE) # Get this from @RawDataBot
-ABOUT_PHOTO_ID = os.environ.get('ABOUT_PHOTO_ID',AgACAgUAAyEFAASszIqHAAEH9VtpCvMU22FrNIo8Zfq-5Z0F8oZSYwACvAtrG__jWFS0QpaQKfeMWAEAAwIAA3kAAzYE) # Get this from @RawDataBot
+START_PHOTO_ID = os.environ.get('START_PHOTO_ID') # Get this from @RawDataBot
+ABOUT_PHOTO_ID = os.environ.get('ABOUT_PHOTO_ID') # Get this from @RawDataBot
 
 
 # --- 💡 NEW SPAM CONSTANTS ---
