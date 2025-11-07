@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 # --- ⚙️ Image Generation Constants (MODIFIED) ---
 # ⚠️ YOU MUST DOWNLOAD 'NotoSans-Regular.ttf' AND 'NotoSans-Bold.ttf'
 # ⚠️ AND PUT THEM IN THE SAME DIRECTORY AS THIS SCRIPT.
-FONT_FILE_BOLD = "Roboto-Bold.ttf"
-FONT_FILE_REGULAR = "Roboto_Bold.ttf"
+FONT_FILE_BOLD = "NotoSans-Bold.ttf"
+FONT_FILE_REGULAR = "NotoSans-Regular.ttf"
 BACKGROUND_IMAGE_PATH = "25552 (1).jpg"
 IMG_WIDTH = 1200
 TITLE_COLOR = (255, 255, 255)
