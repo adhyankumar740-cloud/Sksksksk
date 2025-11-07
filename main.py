@@ -460,7 +460,12 @@ async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAU
     # Else (if user IS blocked), function just ends. No message counted, no quiz trigger.
             
             
-# --- 🚀 MAIN EXECUTION FUNCTION (Unchanged) ---
+# --- 🚀 MAIN EXECUTION FUNCTION (Unchanged) --
+# --- 🚀 MAIN EXECUTION FUNCTION (FIXED WITH PERSISTENCE) ---
+
+# 💡 YEH IMPORT UPAR ADD KAREIN (CommandHandler ke paas)
+from telegram.ext import PicklePersistence 
+
 def main(): 
     if not TOKEN or not WEBHOOK_URL:
         logger.critical("FATAL ERROR: Environment variables missing (TOKEN or WEBHOOK_URL).")
@@ -468,9 +473,18 @@ def main():
         
     leaderboard_manager.setup_database()
 
+    # --- 💡 NEW: Persistence ko setup karein ---
+    # Yeh 'bot_data.pickle' naam ki file banayega
+    # aur saare counters (chat_data, user_data) ismein save karega.
+    my_persistence = PicklePersistence(filepath='bot_data.pickle')
+
     application = (
         Application.builder()
         .token(TOKEN)
+        
+        # --- 💡 NEW: Persistence ko application mein add karein ---
+        .persistence(my_persistence) 
+        
         .concurrent_updates(True)
         .connect_timeout(10)   
         .read_timeout(15)      
@@ -482,14 +496,14 @@ def main():
     # Register the error handler
     application.add_error_handler(error_handler)
     
-    # --- Add all handlers ---
+    # --- Add all handlers (Yeh sab same rahega) ---
     
     # Standard Commands
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("about", about_command))
     application.add_handler(CommandHandler("broadcast", leaderboard_manager.broadcast_command))
 
-    # Leaderboard Commands (RENAMED)
+    # Leaderboard Commands
     application.add_handler(CommandHandler("ranking", leaderboard_manager.ranking_command))
     application.add_handler(CommandHandler("profile", leaderboard_manager.profile_command))
     application.add_handler(CommandHandler("prof", leaderboard_manager.profile_command))
