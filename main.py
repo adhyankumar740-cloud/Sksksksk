@@ -34,10 +34,10 @@ MESSAGE_COUNTER_KEY = 'message_count' # (Ab use nahi ho raha)
 WELCOME_VIDEO_URLS = [
     # 💡 IMPORTANT: Yahan apne video File_IDs daalein, URL nahi
     # Example: "BAACAgIAAxkBAAIFjWZYg-gqPRg1ZgABG3xK6n_Wri-vJgACyAADOg-pSjT1XYFeqvA0HgQ"
-    "BAACAgUAAxkBAAEYzkxpDcmi5dpllrcNnkgGX0rYa2sIcQACTxsAAvzBcVRj6uYb0b6RRzYE", 
-    "BAACAgUAAxkBAAEYzllpDcuVc0J7Uxi3rwcwfECgUiZXLwACShsAAvzBcVSbLY6XZohH7zYE", 
-    "BAACAgUAAxkBAAEYzltpDcvxmgeLM8aNrk4Kfaoeca3NHwACBCUAApwpaVRkuUMi68FD0zYE", 
-    "BAACAgUAAxkBAAEYznNpDcw0I56RPUO5ww9zAAFrs8xgSzQAAgslAAKcKWlUa3Si3mso4ow2BA",
+    "https://files.catbox.moe/4mjz8l.mp4", 
+    "https://files.catbox.moe/hxkkvt.mp4", 
+    "https://files.catbox.moe/li9zgh.mp4", 
+    "https://files.catbox.moe/vq58fh.mp4",
 ]
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -124,67 +124,69 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---
 # --- 💡 MODIFIED: Welcome message now uses HTML to prevent crashes
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 1. Safety Check: If for some reason the list is empty, exit.
     if not update.message.new_chat_members:
         return
-        
-    leaderboard_manager.register_chat(update) 
-    
+
+    leaderboard_manager.register_chat(update)
     chat_id = update.effective_chat.id
-    chat_name = update.effective_chat.title
-    
-    # Use html.escape for chat name for safety
-    chat_name_escaped = html.escape(chat_name) if chat_name else "this chat"
-    
-    # Determine the video/URL to use
+    chat_name = html.escape(update.effective_chat.title or "this chat")
+
     video_url = None
     if WELCOME_VIDEO_URLS:
         video_index = context.bot_data.get('video_counter', 0)
         video_url = WELCOME_VIDEO_URLS[video_index % len(WELCOME_VIDEO_URLS)]
         context.bot_data['video_counter'] = video_index + 1
-    
-    
-    # Process each new member
+
     for member in update.message.new_chat_members:
         if member.is_bot:
             continue
-            
-        user_mention = member.mention_html() # Already HTML escaped
+
+        user_mention = member.mention_html()
         user_id = member.id
-        
-        # Switched to HTML tags (<b> for bold, <code> for code)
         welcome_message = (
-            f"👋 <b>Welcome to {chat_name_escaped}</b>!\n\n"
+            f"👋 <b>Welcome to {chat_name}</b>!\n\n"
             f"User: {user_mention}\n"
             f"Telegram ID: <code>{user_id}</code>\n\n"
             f"Chat and earn your spot on the leaderboard! 🏆"
         )
-        
+
+        if not video_url:
+            await context.bot.send_message(chat_id=chat_id, text=welcome_message, parse_mode=constants.ParseMode.HTML)
+            return
+
         try:
-            if video_url:
-                await context.bot.send_video(
-                    chat_id=chat_id, 
-                    video=video_url, # <-- Can be File ID or public URL
-                    caption=welcome_message,
-                    parse_mode=constants.ParseMode.HTML
-                )
-            else:
-                 # Agar WELCOME_VIDEO_URLS list empty hai toh yahan direct message bhej do
-                 await context.bot.send_message(
+            # Try direct send first
+            await context.bot.send_video(
+                chat_id=chat_id,
+                video=video_url,
+                caption=welcome_message,
+                parse_mode=constants.ParseMode.HTML,
+            )
+        except Exception as e:
+            logger.warning(f"Direct video send failed ({video_url}): {e}. Trying manual download...")
+
+            # Fallback: download and reupload
+            import requests, tempfile
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".mp4") as tmp:
+                    r = requests.get(video_url, timeout=15)
+                    r.raise_for_status()
+                    tmp.write(r.content)
+                    tmp.flush()
+
+                    await context.bot.send_video(
+                        chat_id=chat_id,
+                        video=open(tmp.name, "rb"),
+                        caption=welcome_message,
+                        parse_mode=constants.ParseMode.HTML,
+                    )
+            except Exception as e2:
+                logger.error(f"Manual download+upload failed: {e2}")
+                await context.bot.send_message(
                     chat_id=chat_id,
                     text=welcome_message,
                     parse_mode=constants.ParseMode.HTML
-                 )
-        except Exception as e:
-            # Enhanced logging to see what was sent when it failed
-            logger.error(f"Failed to send welcome video to {chat_id} (URL/ID: {video_url}): {e}")
-            
-            # Agar video fail ho jaaye, toh sirf text message bhej do (jo pehle se ho raha hai)
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=welcome_message,
-                parse_mode=constants.ParseMode.HTML 
-            )
+                )
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot = await context.bot.get_me()
