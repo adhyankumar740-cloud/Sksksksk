@@ -488,7 +488,7 @@ def main():
     # Leaderboard Commands (RENAMED)
     application.add_handler(CommandHandler("ranking", leaderboard_manager.ranking_command))
     application.add_handler(CommandHandler("profile", leaderboard_manager.profile_command))
-    application.add_handler(CommandHandler("prof", leaderboard_formanager.profile_command))
+    application.add_handler(CommandHandler("prof", leaderboard_manager.profile_command))
     application.add_handler(CallbackQueryHandler(leaderboard_manager.leaderboard_callback, pattern='^lb_'))
     
     # New Image Commands
