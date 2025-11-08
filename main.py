@@ -84,7 +84,7 @@ ABOUT_PHOTO_ID = os.environ.get('ABOUT_PHOTO_ID')
 
 # --- 💡 NEW SPAM CONSTANTS ---
 SPAM_MESSAGE_LIMIT = 5 # 15 s
-SPAM_TIME_WINDOW = 1 # 5 s
+SPAM_TIME_WINDOW = 2# 5 s
 SPAM_BLOCK_DURATION = 1200 # 1200 s = 20 मिनट
 
 
