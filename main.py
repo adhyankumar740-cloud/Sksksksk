@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL') 
-OWNER_ID = os.environ.get('OWNER_ID')
+OWNER_ID = os.environ.get('OWNER_ID',8595517459)
 PEXELS_API_KEY = os.environ.get('PEXELS_API_KEY')
 STABLE_HORDE_API_KEY = os.environ.get('STABLE_HORDE_API_KEY', '0000000000')
 
@@ -214,7 +214,27 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(about_text, parse_mode=constants.ParseMode.MARKDOWN_V2)
     else:
         await update.message.reply_text(about_text, parse_mode=constants.ParseMode.MARKDOWN_V2)
+#
+# main.py (New function to be added)
 
+async def release_lock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Owner-only command to manually release the global_quiz_lock and reset the timer.
+    """
+    # Owner check
+    if not OWNER_ID or str(update.effective_user.id) != str(OWNER_ID):
+        await update.message.reply_text("This is an owner-only command.")
+        return
+    
+    # 1. Lock release karo
+    leaderboard_manager.set_bot_value(LOCK_KEY, False)
+    
+    # 2. Global quiz timer bhi reset karo, kyunki quiz fail ho chuka hai
+    # datetime.now(timezone.utc).timestamp() use karein taaki timestamp correct ho
+    current_time_ts = datetime.now(timezone.utc).timestamp()
+    leaderboard_manager.set_bot_value(LAST_GLOBAL_QUIZ_KEY, current_time_ts) 
+    
+    await update.message.reply_text("✅ Global quiz lock released, and global timer reset. You can now trigger a new quiz.")
 
 # --- get_id Command (Unchanged) ---
 async def get_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -601,6 +621,13 @@ def main():
 
     # NAYA COMMAND
     application.add_handler(CommandHandler("get_id", get_id_command))
+    # main.py (Inside def main():)
+
+    # NAYA COMMAND yahan register karein
+    application.add_handler(CommandHandler("release_lock", release_lock_command))
+
+    # Standard Commands...
+    # ...
 
     # Message Handlers
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
