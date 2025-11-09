@@ -1,7 +1,7 @@
 # main.py (Updated with 10-Minute Global Quiz Logic + ID Finder)
 
 import telegram
-from telegram import Update, constants
+from telegram import Update, constants, InlineKeyboardButton, InlineKeyboardMarkup # 💡 NEW: InlineButton imports
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 from telegram.helpers import escape_markdown
 import requests
@@ -114,8 +114,82 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 # --- 🎯 COMMANDS (Unchanged) ---
+# main.py (start_command function ko isse replace karein)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    leaderboard_manager.setup_database() 
+    leaderboard_manager.register_chat(update) 
+    
+    bot = await context.bot.get_me()
+    bot_name = escape_markdown(bot.first_name, version=2)
+    user_name = escape_markdown(update.effective_user.first_name, version=2)
+
+    start_text = (
+        f"👋 *Hi {user_name}, I'm {bot_name}*\\!\n\n"
+        f"I'm here to make this group fun with quizzes and rankings\\.\n\n"
+        f"**What I can do:**\n"
+        f"• 🏆 Track message rankings \\(/ranking\\)\n"
+        f"• 🧠 Run automatic quizzes as you chat\n"
+        f"• 👤 Check your stats with \\/profile\n"
+        f"• 🖼️ Find images with \\/img `[query]`\n"
+        f"• 🎨 Generate images with \\/gen `[prompt]`\n\n"
+        f"Just start chatting to activate the next quiz and climb the ranks\\!"
+    )
+
+    # --- 💡 NEW: Inline Keyboard Setup ---
+    # NOTE: 'bot_username' ko yahan hardcode kiya gaya hai. 
+    # Agar aapka bot username alag hai, toh ise badal dein.
+    bot_username = bot.username # Ya 'YourBotUsername'
+    
+    # 1. Bada button (Add Me to Your Group)
+    add_button = InlineKeyboardButton(
+        "➕ Add Me to Your Group", 
+        url=f"https://t.me/{bot_username}?startgroup=true"
+    )
+    
+    # 2. Chote buttons (Support Channel aur Support Group)
+    # ⚠️ IMPORTANT: In URLs ko apne support links se badal dein
+    support_channel_button = InlineKeyboardButton(
+        "📢 Support Channel", 
+        url="https://t.me/YourSupportChannelLink" # <-- LINK BADALNA HAI
+    )
+    support_group_button = InlineKeyboardButton(
+        "💬 Support Group", 
+        url="https://t.me/YourSupportGroupLink" # <-- LINK BADALNA HAI
+    )
+    
+    # Inline Keyboard rows
+    keyboard = InlineKeyboardMarkup([
+        [add_button],                                # Row 1: Bada button
+        [support_channel_button, support_group_button] # Row 2: Do chote button
+    ])
+    # ----------------------------------------
+    
+    # Message send karne ka tarika ab keyboard ko include karega
+    if START_PHOTO_ID:
+        try:
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=START_PHOTO_ID,
+                caption=start_text,
+                parse_mode=constants.ParseMode.MARKDOWN_V2,
+                reply_markup=keyboard # <-- 💡 KEYBOARD ADDED
+            )
+        except Exception as e:
+            logger.error(f"Failed to send start photo: {e}. Sending text instead.")
+            await update.message.reply_text(
+                start_text, 
+                parse_mode=constants.ParseMode.MARKDOWN_V2,
+                reply_markup=keyboard # <-- 💡 KEYBOARD ADDED
+            )
+    else:
+        await update.message.reply_text(
+            start_text, 
+            parse_mode=constants.ParseMode.MARKDOWN_V2,
+            reply_markup=keyboard # <-- 💡 KEYBOARD ADDED
+        )
+
+'''async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     leaderboard_manager.setup_database() 
     leaderboard_manager.register_chat(update) 
     
@@ -147,7 +221,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Failed to send start photo: {e}. Sending text instead.")
             await update.message.reply_text(start_text, parse_mode=constants.ParseMode.MARKDOWN_V2)
     else:
-        await update.message.reply_text(start_text, parse_mode=constants.ParseMode.MARKDOWN_V2)
+        await update.message.reply_text(start_text, parse_mode=constants.ParseMode.MARKDOWN_V2)'''
 
 # ---
 # --- 💡 MODIFIED: Welcome message now uses HTML to prevent crashes
