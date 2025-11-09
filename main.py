@@ -657,9 +657,9 @@ def main():
     # Isse user_data, chat_data, aur bot_data restart ke baad bhi safe rahenge.
     persistence = PicklePersistence(
         filepath='bot_data.pkl',  # File ka naam
-        store_user_data=True,     # ZAROORI: user_data (spam timestamps) ke liye
-        store_chat_data=False,    # Aap chat_data use nahi kar rahe
-        store_bot_data=True       # ZAROORI: bot_data (global quiz timers) ke liye
+       # store_user_data=True,     # ZAROORI: user_data (spam timestamps) ke liye
+     #   store_chat_data=False,    # Aap chat_data use nahi kar rahe
+     #   store_bot_data=True       # ZAROORI: bot_data (global quiz timers) ke liye
     )
     # -----------------------------------
 
