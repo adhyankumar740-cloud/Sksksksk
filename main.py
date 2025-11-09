@@ -155,7 +155,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     support_group_button = InlineKeyboardButton(
         "💬 Support Group", 
-        url="https://t.me/YourSupportGroupLink" # <-- LINK BADALNA HAI
+        url="https://t.me/OrbitStudioOfficial" # <-- LINK BADALNA HAI
     )
     
     # Inline Keyboard rows
