@@ -16,8 +16,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 logger = logging.getLogger(__name__)
 
 # --- ⚙️ Image Generation Constants (Unchanged) ---
-FONT_FILE_BOLD = "NotoSans-Bold.ttf"
-FONT_FILE_REGULAR = "NotoSans-Regular.ttf"
+FONT_FILE_BOLD = "Roboto-Bold.ttf"
+FONT_FILE_REGULAR = "Roboto-Regular.ttf"
 BACKGROUND_IMAGE_PATH = "25552 (1).jpg"
 IMG_WIDTH = 1200
 TITLE_COLOR = (255, 255, 255)
