@@ -85,7 +85,7 @@ ABOUT_PHOTO_ID = os.environ.get('ABOUT_PHOTO_ID')
 # --- 💡 NEW SPAM CONSTANTS ---
 SPAM_MESSAGE_LIMIT = 5 # 15 s
 SPAM_TIME_WINDOW = 2# 5 s
-SPAM_BLOCK_DURATION = 1200 # 1200 s = 20 मिनट
+SPAM_BLOCK_DURATION = 600 # 1200 s = 20 मिनट
 
 
 # --- Error Handler (Unchanged, Yeh pehle se 'best' hai) ---
@@ -151,7 +151,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ⚠️ IMPORTANT: In URLs ko apne support links se badal dein
     support_channel_button = InlineKeyboardButton(
         "📢 Support Channel", 
-        url="https://t.me/YourSupportChannelLink" # <-- LINK BADALNA HAI
+        url="https://t.me/Orbit_Studio" # <-- LINK BADALNA HAI
     )
     support_group_button = InlineKeyboardButton(
         "💬 Support Group", 
@@ -623,7 +623,7 @@ async def send_quiz_and_track_id(context: ContextTypes.DEFAULT_TYPE, chat_id, qu
 '''
 
 # --- 🎯 CORE MESSAGE COUNTER LOGIC (POORI TARAH BADAL GAYA) ---
-async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+'''async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if update.effective_chat.type not in [constants.ChatType.GROUP, constants.ChatType.SUPERGROUP, constants.ChatType.PRIVATE] or not update.effective_user:
         return
@@ -702,7 +702,102 @@ async def send_quiz_after_n_messages(update: Update, context: ContextTypes.DEFAU
             pass
     
     # Else (if user IS blocked), function just ends. No message counted, no quiz trigger.
+            '''
+# main.py (पुराने send_quiz_after_n_messages function ko is naye code se replace karein)
+
+# --- 🎯 CORE MESSAGE HANDLER LOGIC (SABHI TYPES KE MESSAGE HANDLE KAREGA) ---
+async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    
+    # 💡 FIX: Ab yeh kisi bhi message type (text, sticker, photo, gif) par chalega
+    if update.effective_chat.type not in [constants.ChatType.GROUP, constants.ChatType.SUPERGROUP] or not update.effective_user or update.effective_user.is_bot:
+        return
+    
+    # ensure message object is available (text, sticker, photo, etc.)
+    if not update.message:
+        return
+    
+    # Agar message ek command hai (jo filters mein rok diya jana chahiye, phir bhi safety ke liye)
+    if update.message.text and update.message.text.startswith('/'):
+        return
+
+    chat_id = update.effective_chat.id
+    user_data = context.user_data
+    bot_data = context.bot_data
+
+    # --- 1. Spam Protection Logic (10 Minutes Ignore) ---
+    current_time = time.time()
+    blocked_until = user_data.get('leaderboard_blocked_until', 0)
+    
+    # A. Blocked Status Check
+    if current_time < blocked_until:
+        # User abhi bhi ignore list mein hai. Message ko ignore karo.
+        logger.info(f"User {update.effective_user.id} message ignored (still blocked).")
+        return # 💡 Blocked user ko ignore karo
+        
+    # B. Cleanup (Agar ignore time poora ho gaya hai)
+    if 'leaderboard_blocked_until' in user_data:
+         logger.info(f"User {update.effective_user.id} is now unblocked and key removed.")
+         del user_data['leaderboard_blocked_until']
+         
+    # C. Rate Limiting Check (Yeh sabhi messages ke liye count hoga)
+    message_timestamps = user_data.get('msg_timestamps', [])
+    if not isinstance(message_timestamps, list):
+         message_timestamps = []
+         
+    time_window_start = current_time - SPAM_TIME_WINDOW
+    
+    # Purane timestamps ko hatao aur naya add karo
+    recent_timestamps = [t for t in message_timestamps if t > time_window_start]
+    recent_timestamps.append(current_time)
+    user_data['msg_timestamps'] = recent_timestamps
+    
+    if len(recent_timestamps) >= SPAM_MESSAGE_LIMIT:
+        # User ne spam kiya! Ignore karo.
+        user_data['leaderboard_blocked_until'] = current_time + SPAM_BLOCK_DURATION
+        user_data['msg_timestamps'] = [] # Timestamps clear karo
+        logger.warning(f"!!! SPAM IGNORE TRIGGERED !!! User {update.effective_user.id} ignored for 10 minutes.")
+        
+        try:
+            username = update.effective_user.username
+            mention = f"@{username}" if username else update.effective_user.mention_html()
             
+            # 💡 NEW: Warning message
+            await update.message.reply_text(
+                f"{mention} <b>You are being ignored for 10 minutes for spamming!</b>\n"
+                f"Your rapid messages will not count towards the leaderboard or trigger quizzes during this time.",
+                parse_mode=constants.ParseMode.HTML
+            )
+            return # 💡 Ignore hone ke baad, turant return karo
+            
+        except Exception as e:
+            logger.warning(f"Failed to send spam warning: {e}")
+            return
+            
+    # --- 2. Update DB (Leaderboard) ---
+    # Yahan sirf woh messages pahunchenge jo spam nahi the
+    await leaderboard_manager.update_message_count_db(update, context)
+
+    # --- 3. Check for Quiz (Global Logic) ---
+    # Yahan sirf woh messages pahunchenge jo spam nahi the
+    
+    last_quiz_time = bot_data.get(LAST_GLOBAL_QUIZ_KEY, 0)
+    
+    if current_time - last_quiz_time > GLOBAL_QUIZ_COOLDOWN:
+        
+        if bot_data.get(LOCK_KEY, False):
+            return
+        
+        try:
+            bot_data[LOCK_KEY] = True
+            logger.info(f"Global quiz cooldown over. Triggered by user {update.effective_user.id} in chat {chat_id}. Broadcasting to all.")
+            await broadcast_quiz(context) 
+            
+        except Exception as e:
+            logger.error(f"Error during global quiz broadcast trigger: {e}")
+        finally:
+            bot_data[LOCK_KEY] = False
+    else:
+        pass
             
 # --- 🚀 MAIN EXECUTION FUNCTION (Unchanged) ---
 def main(): 
@@ -746,8 +841,25 @@ def main():
     # NAYA COMMAND
     application.add_handler(CommandHandler("get_id", get_id_command))
 
+    # main.py (main function ke andar)
+
+# ... (baaki handlers) ...
+
     # Message Handlers
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
+    
+    # 💡 FIX: Message handler ab SABHI (non-command) messages par chalega
+    application.add_handler(
+        MessageHandler(
+            ~filters.COMMAND & filters.ChatType.GROUPS, # Commands ko aur Private chats ko ignore karo
+            handle_all_messages # Naya function jo sabhi message types ko handle karega
+        )
+    )
+    
+# ... (rest of main function) ...
+
+    # Message Handlers
+    '''application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
     
     # Message handler (filter fix ke sath)
     application.add_handler(
@@ -755,7 +867,7 @@ def main():
             filters.TEXT & ~filters.COMMAND, # filters.User() hata hua hai
             send_quiz_after_n_messages
         )
-    )
+    )'''
     
     PORT = int(os.environ.get("PORT", "8000")) 
     
