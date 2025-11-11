@@ -495,7 +495,7 @@ async def send_quiz_and_handle_errors(context: ContextTypes.DEFAULT_TYPE, chat_i
             type=constants.PollType.QUIZ,
             correct_option_id=quiz_data['correct_option_id'],
             explanation=quiz_data['explanation'],
-            is_anonymous=True,
+            is_anonymous=False,
             open_period=600 # Poll 10 minute ke liye khula rahega
         )
         logger.info(f"Quiz sent successfully to {chat_id}.")
