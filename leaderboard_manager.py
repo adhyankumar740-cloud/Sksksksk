@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # Agar aapke paas NotoSans font nahi hai to ye default load karega
 # Par boxes [] hatane ke liye "NotoSans-Regular.ttf" folder me hona chahiye
 FONT_MAIN = "Roboto-Bold.ttf"
-FONT_FALLBACK = "arial.ttf" 
+FONT_FALLBACK = "NotoSans-Regular.ttf" 
 
 # Image Dimensions
 IMG_WIDTH = 1200  # Zada chauda taaki naam na katein
