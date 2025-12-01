@@ -49,6 +49,7 @@ STABLE_HORDE_API_KEY = os.environ.get('STABLE_HORDE_API_KEY', '0000000000')
 START_PHOTO_ID = os.environ.get('START_PHOTO_ID') 
 ABOUT_PHOTO_ID = os.environ.get('ABOUT_PHOTO_ID') 
 DONATION_PHOTO_ID = os.environ.get('DONATION_PHOTO_ID') # QR Code Photo ID
+DONATION_DETAILS = os.environ.get('DONATION_DETAILS', "UPI: example@upi / Wallet: 1234567890")
 # --- 💡 NEW SPAM CONSTANTS ---
 SPAM_MESSAGE_LIMIT = 5 
 SPAM_TIME_WINDOW = 2
