@@ -48,7 +48,7 @@ STABLE_HORDE_API_KEY = os.environ.get('STABLE_HORDE_API_KEY', '0000000000')
 # --- 💡 NEW: Photo IDs for Start/About ---
 START_PHOTO_ID = os.environ.get('START_PHOTO_ID') 
 ABOUT_PHOTO_ID = os.environ.get('ABOUT_PHOTO_ID') 
-
+DONATION_PHOTO_ID = os.environ.get('DONATION_PHOTO_ID') # QR Code Photo ID
 # --- 💡 NEW SPAM CONSTANTS ---
 SPAM_MESSAGE_LIMIT = 5 
 SPAM_TIME_WINDOW = 2
@@ -270,7 +270,42 @@ async def get_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(response_text, parse_mode=constants.ParseMode.HTML)
     else:
         await update.message.reply_text("Could not find a File ID in the replied message.")
+# ... (around line 300, after get_id_command)
 
+async def donation_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles the /donation command to display donation information."""
+    
+    donation_photo_id = DONATION_PHOTO_ID
+    donation_details = DONATION_DETAILS
+    bot_name = escape_markdown((await context.bot.get_me()).first_name, version=2)
+    
+    donation_text = (
+        f"🙏 *Support {bot_name}*\\!\n\n"
+        f"If you enjoy using this bot and wish to support its continued development, you can help us here\\.\n\n"
+        f"**Donation Details:**\n"
+        f"{escape_markdown(donation_details, version=2)}\n\n"
+        f"Thank you for your generosity\\!"
+    )
+    
+    if donation_photo_id:
+        try:
+            # Send photo with caption (Assuming DONATION_PHOTO_ID holds the QR code image ID)
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=donation_photo_id,
+                caption=donation_text,
+                parse_mode=constants.ParseMode.MARKDOWN_V2
+            )
+        except Exception as e:
+            logger.error(f"Failed to send donation photo: {e}. Sending text instead.")
+            await update.message.reply_text(donation_text, parse_mode=constants.ParseMode.MARKDOWN_V2)
+    else:
+        # Send text only if DONATION_PHOTO_ID is not set
+        await update.message.reply_text(
+            f"⚠️ **Donation Photo Missing**\\!\n\n{donation_text}",
+            parse_mode=constants.ParseMode.MARKDOWN_V2
+        )
+# ... (before img_command)
 async def img_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not PEXELS_API_KEY:
         await update.message.reply_text("Image search is disabled. `API_KEY` is not configured.")
@@ -567,7 +602,7 @@ def main():
     # Image Commands
     application.add_handler(CommandHandler("img", img_command))
     application.add_handler(CommandHandler("gen", gen_command))
-
+    application.add_handler(CommandHandler("donation", donation_command))
     # ID Finder
     application.add_handler(CommandHandler("get_id", get_id_command))
 
