@@ -15,7 +15,7 @@ import traceback
 import json
 import time 
 import tempfile 
-
+import psutil
 # --- Import Leaderboard Manager ---
 import leaderboard_manager 
 
@@ -55,6 +55,34 @@ SPAM_MESSAGE_LIMIT = 5
 SPAM_TIME_WINDOW = 2
 SPAM_BLOCK_DURATION = 600 
 
+# --- 💡 Naya: Initialize Bot Start Time ---
+BOT_START_TIME = datetime.now()
+try:
+    import psutil
+    logger.info("psutil imported successfully.")
+except ImportError:
+    psutil = None
+    logger.warning("psutil not installed. System metrics will be limited.")
+
+# --- 💡 Naya: Uptime Helper Function ---
+def get_uptime_string():
+    """Calculates and formats the bot's uptime."""
+    delta = datetime.now() - BOT_START_TIME
+    days = delta.days
+    hours, remainder = divmod(delta.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    
+    uptime_str = []
+    if days > 0:
+        uptime_str.append(f"{days}d")
+    if hours > 0:
+        uptime_str.append(f"{hours}h")
+    if minutes > 0:
+        uptime_str.append(f"{minutes}m")
+    uptime_str.append(f"{seconds}s")
+    
+    return ' '.join(uptime_str)
+    
 # --- Error Handler ---
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Exception while handling an update:", exc_info=context.error)
@@ -307,6 +335,63 @@ async def donation_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=constants.ParseMode.MARKDOWN_V2
         )
 # ... (before img_command)
+# ... (after donation_command)
+
+async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Shows detailed bot status: latency, uptime, resource usage, and database info."""
+    
+    start_time = time.time()
+    
+    # 1. Latency (Start)
+    initial_message = await update.message.reply_text("Checking status... 🚀")
+    
+    # 2. Uptime Calculation
+    uptime_str = get_uptime_string()
+
+    # 3. Resource Usage (RAM/ROM)
+    ram_usage = "N/A"
+    try:
+        if psutil:
+            process = psutil.Process(os.getpid())
+            mem = process.memory_info()
+            # Convert bytes to megabytes (RSS: Resident Set Size)
+            ram_usage = f"{mem.rss / (1024 * 1024):.2f} MB" 
+        else:
+            # Fallback for environments without psutil
+            ram_usage = "Limited (Need psutil)"
+    except Exception:
+        ram_usage = "Error fetching RAM"
+    
+    # 4. Database Status (Assuming connection through leaderboard_manager)
+    db_status = "SQLite / PostgreSQL (via Leaderboard Manager)"
+
+    # 5. Latency (End)
+    end_time = time.time()
+    latency_ms = (end_time - start_time) * 1000
+    
+    # 6. Format Final Message
+    bot_info = await context.bot.get_me()
+    bot_name = escape_markdown(bot_info.first_name, version=2)
+    
+    status_text = (
+        f"✨ *Bot Status for {bot_name}* ✨\n\n"
+        f"**⚡️ Responsiveness**\n"
+        f"  • Latency: `{latency_ms:.2f} ms`\n\n"
+        f"**⏱️ Uptime**\n"
+        f"  • Running For: `{uptime_str}`\n\n"
+        f"**💾 Resources**\n"
+        f"  • RAM Usage: `{ram_usage}`\n"
+        f"  • Storage/ROM: `External (Render/DB)`\n\n" # Ye general info hai
+        f"**📊 System Details**\n"
+        f"  • Database: `{db_status}`"
+    )
+
+    # 7. Edit the initial message
+    await initial_message.edit_text(
+        status_text,
+        parse_mode=constants.ParseMode.MARKDOWN_V2
+    )
+
 async def img_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not PEXELS_API_KEY:
         await update.message.reply_text("Image search is disabled. `API_KEY` is not configured.")
@@ -604,6 +689,7 @@ def main():
     application.add_handler(CommandHandler("img", img_command))
     application.add_handler(CommandHandler("gen", gen_command))
     application.add_handler(CommandHandler("donation", donation_command))
+    application.add_handler(CommandHandler("ping", ping_command))
     # ID Finder
     application.add_handler(CommandHandler("get_id", get_id_command))
 
